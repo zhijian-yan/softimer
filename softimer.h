@@ -13,20 +13,104 @@ extern "C" {
 
 #define stim_malloc(size) malloc(size)
 #define stim_free(ptr) free(ptr)
-#define STIM_MAX_TICKS (((uint32_t) - 1) >> 1)
+#define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 
+/**
+ * @brief Opaque handle type for timer instances
+ */
 typedef struct stim *stim_handle_t;
+
+/**
+ * @brief Timer expiration callback function type
+ *
+ * @param timer Handle of the expired timer
+ * @param user_data User-defined data pointer
+ */
 typedef void (*stim_cb_t)(stim_handle_t timer, void *user_data);
 
+/**
+ * @brief Increment the system tick counter
+ * @note This function should be called periodically to advance the timer base
+ */
 inline void stim_systick_inc(void);
+
+/**
+ * @brief Create a new timer instance
+ * @note The period parameter must be in the range [1, STIM_MAX_TICKS]
+ *       If the period is outside this range, the function returns NULL
+ *
+ * @param period_ticks Timer period in system ticks
+ * @param cb Callback function to be executed upon timer expiration
+ * @param user_data User-defined data pointer passed to the callback function
+ * @return
+ * Timer handle on success, NULL on failure
+ */
 stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb, void *user_data);
+
+/**
+ * @brief Delete a timer instance and release its resources
+ * @note This operation can only be performed when the timer is stopped
+ *
+ * @param ptimer Pointer to the timer handle to be deleted
+ */
 void stim_delete(stim_handle_t *ptimer);
+
+/**
+ * @brief Start the specified timer
+ * @note The timer will be inserted into the active timer list sorted by
+ * remaining time
+ *
+ * @param timer Handle of the timer to start
+ */
 void stim_start(stim_handle_t timer);
+
+/**
+ * @brief Stop the specified timer
+ * @note This function removes the timer from the active timer list
+ *
+ * @param timer Handle of the timer to stop
+ */
 void stim_stop(stim_handle_t timer);
+
+/**
+ * @brief Process timer expiration events
+ * @note This function should be called periodically to handle expired timers
+ */
 void stim_handler(void);
+
+/**
+ * @brief Register or update the callback function for a timer
+ * @note This operation can only be performed when the timer is stopped
+ *
+ * @param timer Handle of the target timer
+ * @param cb New callback function to be registered
+ * @param user_data User data to be passed to the callback function
+ * @return
+ * 0 on success, -1 on failure
+ */
 int stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
+
+/**
+ * @brief Set the period for the specified timer
+ * @note This operation can only be performed when the timer is stopped
+ *
+ * @param timer Handle of the target timer
+ * @param period_ticks New timer period in system ticks
+ * @return
+ * 0 on success, -1 on failure
+ */
 int stim_set_period(stim_handle_t timer, uint32_t period_ticks);
-int stim_set_period_sync(stim_handle_t timer, uint32_t period_ticks);
+
+/**
+ * @brief Set the timer period and reset the timer immediately
+ * @note This operation can only be performed when the timer is stopped
+ *
+ * @param timer Handle of the target timer
+ * @param period_ticks New timer period in system ticks
+ * @return
+ * 0 on success, -1 on failure
+ */
+int stim_set_period_reset(stim_handle_t timer, uint32_t period_ticks);
 
 #ifdef __cplusplus
 }

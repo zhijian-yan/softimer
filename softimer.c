@@ -158,7 +158,7 @@ int stim_set_period(stim_handle_t timer, uint32_t period_ticks) {
   return -1;
 }
 
-int stim_set_period_sync(stim_handle_t timer, uint32_t period_ticks) {
+int stim_set_period_reset(stim_handle_t timer, uint32_t period_ticks) {
   if (timer && !timer->enabled) {
     if (period_ticks > STIM_MAX_TICKS)
       period_ticks = STIM_MAX_TICKS;
