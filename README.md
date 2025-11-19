@@ -7,3 +7,40 @@
 - 定时器重载时基于当前时刻计算目标时刻，无误差累积
 - 采用面向对象的思想进行封装
 - 硬件无关，跨平台，无需第三方依赖
+
+# 移植
+- **softimer**的代码为C语言设计，支持C++环境，移植无需其他步骤，直接将源代码添加到项目中即可
+- 对象的创建默认使用C语言标准库的`malloc`函数，如有特殊的内存分配需求，可以将头文件中`stim_malloc`和`stim_free`宏替换为项目中所使用的内存分配函数
+
+# 使用
+## 1 设置全局递增计数器
+在硬件定时器的回调中调用`stim_systick_inc`函数并按照你的需要设置硬件定时器的频率，这将为软件定时器提供时间基准
+```c
+void hardtimer_callback(void) // 硬件定时器回调
+{
+    stim_systick_inc();
+}
+```
+## 2 创建定时器实例
+创建一个软件定时器的实例并设置它的回调函数
+```c
+void softimer_cb(stim_handle_t timer, void *user_data)
+{
+    // your code.
+}
+
+stim_handle_t timer = stim_create(1000, softimer_cb, NULL);
+```
+## 3 启动定时器
+调用`stim_start`函数启动定时器，它会将你创建的定时器加入到全局链表中并按照到期时间进行升序排序
+```c
+stim_start(timer);
+```
+## 4 周期性调用定时器处理程序
+最后需要周期性调用定时器的到期处理程序
+```c
+while(1)
+{
+    stim_handler();
+}
+```
