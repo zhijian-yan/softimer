@@ -32,7 +32,7 @@ typedef void (*stim_cb_t)(stim_handle_t timer, void *user_data);
  * @brief Increment the system tick counter
  * @note This function should be called periodically to advance the timer base
  */
-inline void stim_systick_inc(void);
+void stim_systick_inc(void);
 
 /**
  * @brief Create a new timer instance

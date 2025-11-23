@@ -17,7 +17,7 @@ static struct stim {
 volatile static uint32_t stim_systicks;
 volatile static uint32_t flag_critical;
 
-inline void stim_systick_inc(void) { ++stim_systicks; }
+void stim_systick_inc(void) { ++stim_systicks; }
 
 stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
                           void *user_data) {
