@@ -80,7 +80,6 @@ void stim_handler(void);
 
 /**
  * @brief Register or update the callback function for a timer
- * @note This operation can only be performed when the timer is stopped
  *
  * @param timer Handle of the target timer
  * @param cb New callback function to be registered
@@ -92,25 +91,34 @@ int stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
 
 /**
  * @brief Set the period for the specified timer
- * @note This operation can only be performed when the timer is stopped
+ * @note The period parameter must be in the range [1, STIM_MAX_TICKS]
+ *       If the period is outside this range, the function returns -1
  *
  * @param timer Handle of the target timer
  * @param period_ticks New timer period in system ticks
  * @return
  * 0 on success, -1 on failure
  */
-int stim_set_period(stim_handle_t timer, uint32_t period_ticks);
+int stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks);
 
 /**
- * @brief Set the timer period and reset the timer immediately
- * @note This operation can only be performed when the timer is stopped
+ * @brief Set timer count value
  *
  * @param timer Handle of the target timer
- * @param period_ticks New timer period in system ticks
+ * @param count New count value
  * @return
  * 0 on success, -1 on failure
  */
-int stim_set_period_reset(stim_handle_t timer, uint32_t period_ticks);
+int stim_set_count(stim_handle_t timer, uint32_t count);
+
+/**
+ * @brief Get current timer count value
+ *
+ * @param timer Handle of the target timer
+ * @return
+ * Current count value of timer, always 0 for invalid handle
+ */
+uint32_t stim_get_count(stim_handle_t timer);
 
 #ifdef __cplusplus
 }
