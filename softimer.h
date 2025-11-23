@@ -51,9 +51,9 @@ stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb, void *user_data);
  * @brief Delete a timer instance and release its resources
  * @note This operation can only be performed when the timer is stopped
  *
- * @param ptimer Pointer to the timer handle to be deleted
+ * @param timer Handle of the timer to start
  */
-void stim_delete(stim_handle_t *ptimer);
+void stim_delete(stim_handle_t timer);
 
 /**
  * @brief Start the specified timer
