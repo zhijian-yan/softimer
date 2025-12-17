@@ -2,6 +2,7 @@
 // Copyright (c) 2025 Zhijian Yan
 
 #include "softimer.h"
+#include <string.h>
 
 static struct stim {
     stim_cb_t cb;
@@ -27,6 +28,7 @@ stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
     timer = (stim_handle_t)stim_malloc(sizeof(struct stim));
     if (!timer)
         return NULL;
+    memset(timer, 0, sizeof(struct stim));
     timer->period_ticks = period_ticks;
     timer->expiry_ticks = 0;
     timer->user_data = user_data;
@@ -137,34 +139,30 @@ void stim_handler(void) {
     }
 }
 
-int stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data) {
+void stim_register_callback(stim_handle_t timer, stim_cb_t cb,
+                            void *user_data) {
     if (!timer)
-        return -1;
+        return;
     timer->user_data = user_data;
     timer->cb = cb;
-    return 0;
 }
 
-int stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks) {
+void stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks) {
     if (!timer)
-        return -1;
+        return;
     if (period_ticks > STIM_MAX_TICKS || period_ticks == 0)
-        return -1;
+        return;
     timer->period_ticks = period_ticks;
-    return 0;
 }
 
-int stim_set_count(stim_handle_t timer, uint32_t count) {
-    if (timer) {
-        timer->count = count;
-        return 0;
-    }
-    return -1;
+void stim_set_count(stim_handle_t timer, uint32_t count) {
+    if (!timer)
+        return;
+    timer->count = count;
 }
 
 uint32_t stim_get_count(stim_handle_t timer) {
-    if (timer) {
-        return timer->count;
-    }
-    return 0;
+    if (!timer)
+        return 0;
+    return timer->count;
 }

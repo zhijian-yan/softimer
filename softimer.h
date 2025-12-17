@@ -51,7 +51,7 @@ stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb, void *user_data);
  * @brief Delete a timer instance and release its resources
  * @note This operation can only be performed when the timer is stopped
  *
- * @param timer Handle of the timer to start
+ * @param timer Handle of the timer to be deleted
  */
 void stim_delete(stim_handle_t timer);
 
@@ -84,10 +84,8 @@ void stim_handler(void);
  * @param timer Handle of the target timer
  * @param cb New callback function to be registered
  * @param user_data User data to be passed to the callback function
- * @return
- * 0 on success, -1 on failure
  */
-int stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
+void stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
 
 /**
  * @brief Set the period for the specified timer
@@ -96,20 +94,16 @@ int stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
  *
  * @param timer Handle of the target timer
  * @param period_ticks New timer period in system ticks
- * @return
- * 0 on success, -1 on failure
  */
-int stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks);
+void stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks);
 
 /**
  * @brief Set timer count value
  *
  * @param timer Handle of the target timer
  * @param count New count value
- * @return
- * 0 on success, -1 on failure
  */
-int stim_set_count(stim_handle_t timer, uint32_t count);
+void stim_set_count(stim_handle_t timer, uint32_t count);
 
 /**
  * @brief Get current timer count value
