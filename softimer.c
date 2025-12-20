@@ -41,9 +41,9 @@ stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
 }
 
 void stim_delete(stim_handle_t timer) {
-    if (timer || !timer->enabled) {
-        stim_free(timer);
-    }
+    if (!timer || timer->enabled)
+        return;
+    stim_free(timer);
 }
 
 static void stim_list_add(stim_handle_t timer) {
@@ -114,7 +114,7 @@ void stim_stop(stim_handle_t timer) {
     timer->enabled = 0;
 }
 
-static int stim_handle_timer(stim_handle_t timer, uint32_t curr_ticks) {
+static int stim_timer_handler(stim_handle_t timer, uint32_t curr_ticks) {
     if ((int32_t)(timer->expiry_ticks - curr_ticks) <= 0) {
         timer->expiry_ticks = curr_ticks + timer->period_ticks;
         ++timer->count;
@@ -130,7 +130,7 @@ void stim_handler(void) {
     uint32_t curr_ticks = stim_systicks;
     if (flag_critical)
         return;
-    while (temp && stim_handle_timer(temp, curr_ticks)) {
+    while (temp && stim_timer_handler(temp, curr_ticks)) {
         if (temp == head) {
             stim_list_del(temp);
             stim_list_add(temp);
