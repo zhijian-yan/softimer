@@ -25,10 +25,10 @@ void timer_callback(void) // 定时器回调
 ```c
 void stim_cb(stim_handle_t timer, void *user_data)
 {
-    swtich((int)timer)
+    switch((int)timer)
     {
-        case (int)timer1:printf("timer1 count:%u\r\n", stim_get_count(timer));break;
-        case (int)timer2:printf("timer2 count:%u\r\n", stim_get_count(timer));break;
+        case (int)timer1:printf("timer1 count:%lu\r\n", stim_get_count(timer));break;
+        case (int)timer2:printf("timer2 count:%lu\r\n", stim_get_count(timer));break;
     }
 }
 
@@ -39,10 +39,10 @@ stim_handle_t timer2 = stim_create(1000, stim_cb, NULL);
 ```c
 void stim_cb(stim_handle_t timer, void *user_data)
 {
-    swtich((int)user_data)
+    switch((int)user_data)
     {
-        case 1:printf("timer1 count:%u\r\n", stim_get_count(timer));break;
-        case 2:printf("timer2 count:%u\r\n", stim_get_count(timer));break;
+        case 1:printf("timer1 count:%lu\r\n", stim_get_count(timer));break;
+        case 2:printf("timer2 count:%lu\r\n", stim_get_count(timer));break;
     }
 }
 
@@ -92,18 +92,18 @@ void timer_callback(void) // 硬件定时器回调
 
 void stim_cb(stim_handle_t timer, void *user_data)
 {
-    swtich((int)user_data)
+    switch((int)user_data)
     {
-        case 1:printf("timer1 count:%u\r\n", stim_get_count(timer));break;
-        case 2:printf("timer2 count:%u\r\n", stim_get_count(timer));break;
+        case 1:printf("timer1 count:%lu\r\n", stim_get_count(timer));break;
+        case 2:printf("timer2 count:%lu\r\n", stim_get_count(timer));break;
     }
 }
 
 void timer_init(void)
 {
     // (添加硬件定时器的初始化代码)
-    stim_startstim_create(100, stim_cb, (void*)1));
-    stim_startstim_create(1000, stim_cb, (void*)2));
+    stim_start(stim_create(100, stim_cb, (void*)1));
+    stim_start(stim_create(1000, stim_cb, (void*)2));
 }
 
 int main()
