@@ -11,14 +11,17 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#define stim_malloc(size) malloc(size)
-#define stim_free(ptr) free(ptr)
+#define STIM_MALLOC(size) malloc(size)
+#define STIM_FREE(ptr) free(ptr)
+#define STIM_ENTER_CRITICAL ((void *)0)
+#define STIM_EXIT_CRITICAL ((void *)0)
+#define STIM_CMD_ARR_SIZE (10)
 #define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 
 /**
  * @brief Opaque handle type for timer instances
  */
-typedef struct stim *stim_handle_t;
+typedef stim_t *stim_handle_t;
 
 /**
  * @brief Timer expiration callback function type
