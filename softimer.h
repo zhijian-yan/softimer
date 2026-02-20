@@ -65,7 +65,7 @@ void stim_delete(stim_handle_t timer);
  *
  * @param timer Handle of the timer to start
  */
-void stim_start(stim_handle_t timer);
+int stim_start(stim_handle_t timer);
 
 /**
  * @brief Stop the specified timer
@@ -73,7 +73,7 @@ void stim_start(stim_handle_t timer);
  *
  * @param timer Handle of the timer to stop
  */
-void stim_stop(stim_handle_t timer);
+int stim_stop(stim_handle_t timer);
 
 /**
  * @brief Process timer expiration events

@@ -65,10 +65,10 @@ void stim_delete(stim_handle_t timer) {
 static void stim_list_add(stim_handle_t timer) {
     stim_t *stim = timer;
     stim_t *temp = head;
-    uint32_t curr_ticks = stim_systicks;
+    uint32_t now = stim_systicks;
     while (temp) {
-        if ((int32_t)(stim->expiry_ticks - curr_ticks) <
-            (int32_t)(temp->expiry_ticks - curr_ticks)) {
+        if ((int32_t)(stim->expiry_ticks - now) <
+            (int32_t)(temp->expiry_ticks - now)) {
             break;
         }
         temp = temp->next;
@@ -125,22 +125,32 @@ static int stim_cmd_push(stim_t *stim, uint32_t type) {
     return 0;
 }
 
-void stim_start(stim_handle_t timer) {
+int stim_start(stim_handle_t timer) {
     stim_t *stim = timer;
+    int ret;
     if (!stim)
         return;
     STIM_ENTER_CRITICAL;
-    stim_cmd_push(stim, STIM_CMD_START);
+    if (stim->state == STIM_DISABLE) {
+        stim->state = STIM_ENABLE;
+        ret = stim_cmd_push(stim, STIM_CMD_START);
+    }
     STIM_EXIT_CRITICAL;
+    return ret;
 }
 
-void stim_stop(stim_handle_t timer) {
+int stim_stop(stim_handle_t timer) {
     stim_t *stim = timer;
+    int ret;
     if (!stim)
         return;
     STIM_ENTER_CRITICAL;
-    stim_cmd_push(stim, STIM_CMD_STOP);
+    if (stim->state == STIM_ENABLE) {
+        stim->state = STIM_DISABLE;
+        ret = stim_cmd_push(stim, STIM_CMD_STOP);
+    }
     STIM_EXIT_CRITICAL;
+    return ret;
 }
 
 static void stim_cmd_handler(void) {
@@ -156,17 +166,11 @@ static void stim_cmd_handler(void) {
         STIM_EXIT_CRITICAL;
         switch (cmd.type) {
         case STIM_CMD_START:
-            if (cmd.stim->state == STIM_DISABLE) {
-                cmd.stim->state = STIM_ENABLE;
-                cmd.stim->expiry_ticks = cmd.stim->period_ticks + stim_systicks;
-                stim_list_add(cmd.stim);
-            }
+            cmd.stim->expiry_ticks = cmd.stim->period_ticks + stim_systicks;
+            stim_list_add(cmd.stim);
             break;
         case STIM_CMD_STOP:
-            if (cmd.stim->state == STIM_ENABLE) {
-                stim_list_del(cmd.stim);
-                cmd.stim->state = STIM_DISABLE;
-            }
+            stim_list_del(cmd.stim);
             break;
         default:
             return;
@@ -174,30 +178,24 @@ static void stim_cmd_handler(void) {
     }
 }
 
-static int stim_timer_handler(stim_handle_t timer, uint32_t curr_ticks) {
-    stim_t *stim = timer;
-    if ((int32_t)(stim->expiry_ticks - curr_ticks) <= 0) {
-        ++stim->count;
-        if (stim->cb)
-            stim->cb(stim, stim->user_data);
-        stim->expiry_ticks += stim->period_ticks;
-        return 1;
-    }
-    return 0;
-}
-
 void stim_handler(void) {
-    uint32_t curr_ticks;
     stim_t *expired;
+    uint32_t now;
     stim_cmd_handler();
+    now = stim_systicks;
     while (head) {
-        curr_ticks = stim_systicks;
-        if (!stim_timer_handler(head, curr_ticks))
-            break;
         expired = head;
-        stim_list_del(expired);
-        if (expired->state == STIM_ENABLE)
+        if ((int32_t)(expired->expiry_ticks - now) <= 0) {
+            stim_list_del(expired);
+            ++expired->count;
+            if (expired->cb)
+                expired->cb(expired, expired->user_data);
+        } else
+            break;
+        if (expired->state == STIM_ENABLE) {
+            expired->expiry_ticks += expired->period_ticks;
             stim_list_add(expired);
+        }
     }
 }
 
