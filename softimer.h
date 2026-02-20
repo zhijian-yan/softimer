@@ -9,19 +9,26 @@ extern "C" {
 #endif
 
 #include <stdint.h>
-#include <stdlib.h>
 
-#define STIM_MALLOC(size) malloc(size)
-#define STIM_FREE(ptr) free(ptr)
-#define STIM_ENTER_CRITICAL ((void *)0)
-#define STIM_EXIT_CRITICAL ((void *)0)
-#define STIM_CMD_ARR_SIZE (16) // must be power of two
+#define STIM_CMD_ARR_SIZE (16) // must be power of 2
 #define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
+
+typedef uint32_t stim_irq_state_t;
+
+static inline stim_irq_state_t stim_enter_critical(void) {
+    //
+    return 0;
+}
+
+static inline void stim_exit_critical(stim_irq_state_t irq_state) {
+    //
+    (void)irq_state;
+}
 
 /**
  * @brief Opaque handle type for timer instances
  */
-typedef stim_t *stim_handle_t;
+typedef struct stim *stim_handle_t;
 
 /**
  * @brief Timer expiration callback function type
@@ -31,32 +38,32 @@ typedef stim_t *stim_handle_t;
  */
 typedef void (*stim_cb_t)(stim_handle_t timer, void *user_data);
 
+typedef struct stim_node {
+    struct stim_node *next;
+    struct stim_node *prev;
+} stim_node_t;
+
+typedef struct stim {
+    stim_cb_t cb;
+    void *user_data;
+    uint32_t expiry_ticks;
+    uint32_t period_ticks;
+    uint32_t count;
+    enum {
+        STIM_DISABLE = 0,
+        STIM_ENABLE = 1,
+    } state;
+    stim_node_t node;
+} stim_t;
+
 /**
  * @brief Increment the system tick counter
  * @note This function should be called periodically to advance the timer base
  */
 void stim_systick_inc(void);
 
-/**
- * @brief Create a new timer instance
- * @note The period parameter must be in the range [1, STIM_MAX_TICKS]
- *       If the period is outside this range, the function returns NULL
- *
- * @param period_ticks Timer period in system ticks
- * @param cb Callback function to be executed upon timer expiration
- * @param user_data User-defined data pointer passed to the callback function
- * @return
- * Timer handle on success, NULL on failure
- */
-stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb, void *user_data);
-
-/**
- * @brief Delete a timer instance and release its resources
- * @note This operation can only be performed when the timer is stopped
- *
- * @param timer Handle of the timer to be deleted
- */
-void stim_delete(stim_handle_t timer);
+int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_t cb,
+              void *user_data);
 
 /**
  * @brief Start the specified timer
@@ -65,7 +72,7 @@ void stim_delete(stim_handle_t timer);
  *
  * @param timer Handle of the timer to start
  */
-int stim_start(stim_handle_t timer);
+int stim_start(stim_t *timer);
 
 /**
  * @brief Stop the specified timer
@@ -73,7 +80,7 @@ int stim_start(stim_handle_t timer);
  *
  * @param timer Handle of the timer to stop
  */
-int stim_stop(stim_handle_t timer);
+int stim_stop(stim_t *timer);
 
 /**
  * @brief Process timer expiration events
@@ -88,7 +95,7 @@ void stim_handler(void);
  * @param cb New callback function to be registered
  * @param user_data User data to be passed to the callback function
  */
-void stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
+void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data);
 
 /**
  * @brief Set the period for the specified timer
@@ -98,7 +105,7 @@ void stim_register_callback(stim_handle_t timer, stim_cb_t cb, void *user_data);
  * @param timer Handle of the target timer
  * @param period_ticks New timer period in system ticks
  */
-void stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks);
+void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks);
 
 /**
  * @brief Set timer count value
@@ -106,7 +113,7 @@ void stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks);
  * @param timer Handle of the target timer
  * @param count New count value
  */
-void stim_set_count(stim_handle_t timer, uint32_t count);
+void stim_set_count(stim_t *timer, uint32_t count);
 
 /**
  * @brief Get current timer count value
@@ -115,7 +122,7 @@ void stim_set_count(stim_handle_t timer, uint32_t count);
  * @return
  * Current count value of timer, always 0 for invalid handle
  */
-uint32_t stim_get_count(stim_handle_t timer);
+uint32_t stim_get_count(stim_t *timer);
 
 #ifdef __cplusplus
 }

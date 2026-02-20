@@ -2,40 +2,24 @@
 // Copyright (c) 2025 Zhijian Yan
 
 #include "softimer.h"
-#include <string.h>
+#include <stddef.h>
 
 #if (STIM_CMD_ARR_SIZE & (STIM_CMD_ARR_SIZE - 1)) != 0
-#error "STIM_CMD_ARR_SIZE must be power of two"
+#error "STIM_CMD_ARR_SIZE must be power of 2"
 #endif
 
 #define container_of(ptr, type, member)                                        \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
-typedef struct stim_node {
-    struct stim_node *next;
-    struct stim_node *prev;
-} stim_node_t;
-
-typedef struct stim {
-    stim_cb_t cb;
-    void *user_data;
-    uint32_t expiry_ticks;
-    uint32_t period_ticks;
-    uint32_t count;
-    enum {
-        STIM_DISABLE = 0,
-        STIM_ENABLE = 1,
-    } state;
-    stim_node_t node;
-} stim_t;
+typedef enum {
+    STIM_CMD_NONE = 0,
+    STIM_CMD_START,
+    STIM_CMD_STOP,
+} stim_cmd_type_t;
 
 typedef struct {
     stim_t *stim;
-    enum {
-        STIM_CMD_NONE = 0,
-        STIM_CMD_START,
-        STIM_CMD_STOP,
-    } type;
+    stim_cmd_type_t type;
 } stim_cmd_t;
 
 static stim_node_t head = {
@@ -51,40 +35,29 @@ void stim_systick_inc(void) { ++stim_systicks; }
 
 static inline uint32_t stim_get_systicks(void) {
     uint32_t now;
-    STIM_ENTER_CRITICAL;
+    stim_irq_state_t irq_state;
+    irq_state = stim_enter_critical();
     now = stim_systicks;
-    STIM_EXIT_CRITICAL;
+    stim_exit_critical(irq_state);
     return now;
 }
 
-stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
-                          void *user_data) {
-    stim_t *stim = NULL;
-    if (period_ticks > STIM_MAX_TICKS || period_ticks == 0)
-        return NULL;
-    stim = (stim_t *)STIM_MALLOC(sizeof(stim_t));
-    if (!stim)
-        return NULL;
-    memset(stim, 0, sizeof(stim_t));
-    stim->period_ticks = period_ticks;
-    stim->expiry_ticks = 0;
-    stim->user_data = user_data;
-    stim->cb = cb;
-    stim->count = 0;
-    stim->state = STIM_DISABLE;
-    stim->node.next = &stim->node;
-    stim->node.prev = &stim->node;
-    return stim;
+int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_t cb,
+              void *user_data) {
+    if (!timer || period_ticks > STIM_MAX_TICKS || period_ticks == 0)
+        return -1;
+    timer->period_ticks = period_ticks;
+    timer->expiry_ticks = 0;
+    timer->user_data = user_data;
+    timer->cb = cb;
+    timer->count = 0;
+    timer->state = STIM_DISABLE;
+    timer->node.next = &timer->node;
+    timer->node.prev = &timer->node;
+    return 0;
 }
 
-void stim_delete(stim_handle_t timer) {
-    stim_t *stim = timer;
-    if (!stim || stim->state == STIM_ENABLE)
-        return;
-    STIM_FREE(stim);
-}
-
-static void stim_list_add(stim_handle_t timer, uint32_t now) {
+static void stim_list_add(stim_t *timer, uint32_t now) {
     stim_t *entry;
     stim_node_t *pos;
     stim_node_t *node = &timer->node;
@@ -103,7 +76,7 @@ static void stim_list_add(stim_handle_t timer, uint32_t now) {
     pos->prev = node;
 }
 
-static void stim_list_del(stim_handle_t timer) {
+static void stim_list_del(stim_t *timer) {
     stim_node_t *node = &timer->node;
     if (node->next == node)
         return;
@@ -113,60 +86,61 @@ static void stim_list_del(stim_handle_t timer) {
     node->prev = node;
 }
 
-static int stim_cmd_push(stim_t *stim, uint32_t type) {
+static int stim_cmd_push(stim_t *timer, stim_cmd_type_t type) {
     uint32_t next_head;
     next_head = (stim_cmd_head + 1) & (STIM_CMD_ARR_SIZE - 1);
     if (next_head == stim_cmd_tail) {
         return -1;
     }
-    stim_cmd_arr[stim_cmd_head].stim = stim;
+    stim_cmd_arr[stim_cmd_head].stim = timer;
     stim_cmd_arr[stim_cmd_head].type = type;
     stim_cmd_head = next_head;
     return 0;
 }
 
-int stim_start(stim_handle_t timer) {
-    stim_t *stim = timer;
+int stim_start(stim_t *timer) {
+    stim_irq_state_t irq_state;
     int ret = 0;
-    if (!stim)
+    if (!timer)
         return -1;
-    STIM_ENTER_CRITICAL;
-    if (stim->state == STIM_DISABLE) {
-        ret = stim_cmd_push(stim, STIM_CMD_START);
+    irq_state = stim_enter_critical();
+    if (timer->state == STIM_DISABLE) {
+        ret = stim_cmd_push(timer, STIM_CMD_START);
         if (!ret)
-            stim->state = STIM_ENABLE;
+            timer->state = STIM_ENABLE;
     }
-    STIM_EXIT_CRITICAL;
+    stim_exit_critical(irq_state);
     return ret;
 }
 
-int stim_stop(stim_handle_t timer) {
-    stim_t *stim = timer;
+int stim_stop(stim_t *timer) {
+    stim_irq_state_t irq_state;
     int ret = 0;
-    if (!stim)
+    if (!timer)
         return -1;
-    STIM_ENTER_CRITICAL;
-    if (stim->state == STIM_ENABLE) {
-        ret = stim_cmd_push(stim, STIM_CMD_STOP);
+    irq_state = stim_enter_critical();
+    if (timer->state == STIM_ENABLE) {
+        ret = stim_cmd_push(timer, STIM_CMD_STOP);
         if (!ret)
-            stim->state = STIM_DISABLE;
+            timer->state = STIM_DISABLE;
     }
-    STIM_EXIT_CRITICAL;
+    stim_exit_critical(irq_state);
     return ret;
 }
 
 static void stim_cmd_handler(void) {
     stim_cmd_t cmd;
     uint32_t now;
+    stim_irq_state_t irq_state;
     while (1) {
-        STIM_ENTER_CRITICAL;
+        irq_state = stim_enter_critical();
         if (stim_cmd_head == stim_cmd_tail) {
-            STIM_EXIT_CRITICAL;
+            stim_exit_critical(irq_state);
             return;
         }
         cmd = stim_cmd_arr[stim_cmd_tail];
         stim_cmd_tail = (stim_cmd_tail + 1) & (STIM_CMD_ARR_SIZE - 1);
-        STIM_EXIT_CRITICAL;
+        stim_exit_critical(irq_state);
         switch (cmd.type) {
         case STIM_CMD_START:
             now = stim_get_systicks();
@@ -203,34 +177,29 @@ void stim_handler(void) {
     }
 }
 
-void stim_register_callback(stim_handle_t timer, stim_cb_t cb,
-                            void *user_data) {
-    stim_t *stim = timer;
-    if (!stim)
+void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data) {
+    if (!timer)
         return;
-    stim->user_data = user_data;
-    stim->cb = cb;
+    timer->user_data = user_data;
+    timer->cb = cb;
 }
 
-void stim_set_period_ticks(stim_handle_t timer, uint32_t period_ticks) {
-    stim_t *stim = timer;
-    if (!stim)
+void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks) {
+    if (!timer)
         return;
     if (period_ticks > STIM_MAX_TICKS || period_ticks == 0)
         return;
-    stim->period_ticks = period_ticks;
+    timer->period_ticks = period_ticks;
 }
 
-void stim_set_count(stim_handle_t timer, uint32_t count) {
-    stim_t *stim = timer;
-    if (!stim)
+void stim_set_count(stim_t *timer, uint32_t count) {
+    if (!timer)
         return;
-    stim->count = count;
+    timer->count = count;
 }
 
-uint32_t stim_get_count(stim_handle_t timer) {
-    stim_t *stim = timer;
-    if (!stim)
+uint32_t stim_get_count(stim_t *timer) {
+    if (!timer)
         return 0;
-    return stim->count;
+    return timer->count;
 }
