@@ -177,10 +177,10 @@ static void stim_cmd_handler(void) {
 static int stim_timer_handler(stim_handle_t timer, uint32_t curr_ticks) {
     stim_t *stim = timer;
     if ((int32_t)(stim->expiry_ticks - curr_ticks) <= 0) {
-        stim->expiry_ticks = curr_ticks + stim->period_ticks;
         ++stim->count;
         if (stim->cb)
             stim->cb(stim, stim->user_data);
+        stim->expiry_ticks += stim->period_ticks;
         return 1;
     }
     return 0;
