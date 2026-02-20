@@ -10,117 +10,254 @@ extern "C" {
 
 #include <stdint.h>
 
-#define STIM_CMD_ARR_SIZE (16) // must be power of 2
+/**
+ * @def STIM_CMD_ARR_SIZE
+ * @brief Size of internal command queue (must be power of 2)
+ *
+ * This defines the capacity of the internal start/stop command ring buffer.
+ * Increasing this value allows more concurrent start/stop requests before
+ * overflow occurs.
+ *
+ * Must be a power of 2.
+ */
+#define STIM_CMD_ARR_SIZE (16)
+
+/**
+ * @def STIM_MAX_TICKS
+ * @brief Maximum supported tick interval
+ *
+ * Timers must use period values in range:
+ *      [1, STIM_MAX_TICKS]
+ *
+ * The value is chosen to ensure safe signed wrap-around comparison.
+ */
 #define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 
+/**
+ * @brief Platform-defined interrupt state type
+ *
+ * This type represents the CPU interrupt state that must be saved and
+ * restored when entering/exiting critical sections.
+ *
+ * On bare-metal systems this may contain PRIMASK or similar register.
+ * On non-RTOS systems it may simply be unused.
+ */
 typedef uint32_t stim_irq_state_t;
 
+/**
+ * @brief Enter critical section
+ *
+ * Default implementation:
+ *   - Does nothing
+ *   - Suitable for single-threaded / non-interrupt environments
+ *
+ * ⚠ IMPORTANT:
+ *   If this timer is used in:
+ *      - ISR context
+ *      - Multi-threaded environment
+ *      - RTOS environment
+ *
+ *   You MUST provide your own implementation that:
+ *      - Disables interrupts or acquires a lock
+ *      - Returns previous interrupt/lock state
+ *
+ *   Example (Cortex-M):
+ *      uint32_t primask = __get_PRIMASK();
+ *      __disable_irq();
+ *      return primask;
+ *
+ * @return Previous interrupt state (0 by default)
+ */
 static inline stim_irq_state_t stim_enter_critical(void) {
-    //
+    /* TODO: Implement platform-specific interrupt disable here if needed */
     return 0;
 }
 
+/**
+ * @brief Exit critical section
+ *
+ * Default implementation:
+ *   - Does nothing
+ *
+ * ⚠ IMPORTANT:
+ *   Must restore the state returned by stim_enter_critical()
+ *
+ *   Example (Cortex-M):
+ *      if (!irq_state)
+ *          __enable_irq();
+ *
+ * @param irq_state State returned by stim_enter_critical()
+ */
 static inline void stim_exit_critical(stim_irq_state_t irq_state) {
-    //
+    /* TODO: Restore interrupt state here if using real critical section */
     (void)irq_state;
 }
 
 /**
  * @brief Opaque handle type for timer instances
+ *
+ * Users should treat this as a handle.
  */
 typedef struct stim *stim_handle_t;
 
 /**
  * @brief Timer expiration callback function type
  *
- * @param timer Handle of the expired timer
+ * This function is called when a timer expires.
+ *
+ * @note The callback is executed in the context of stim_handler().
+ *       It MUST NOT block for long durations.
+ *
+ * @param timer     Handle of the expired timer
  * @param user_data User-defined data pointer
  */
 typedef void (*stim_cb_t)(stim_handle_t timer, void *user_data);
 
+/**
+ * @brief Internal intrusive list node
+ *
+ * Used to link active timers in a doubly-linked sorted list.
+ */
 typedef struct stim_node {
     struct stim_node *next;
     struct stim_node *prev;
 } stim_node_t;
 
+/**
+ * @brief Timer object structure
+ *
+ * Users must allocate this structure (static or dynamic).
+ *
+ * A timer must be initialized using stim_init() before use.
+ *
+ * Internal fields MUST NOT be modified directly by user code.
+ */
 typedef struct stim {
-    stim_cb_t cb;
-    void *user_data;
-    uint32_t expiry_ticks;
-    uint32_t period_ticks;
-    uint32_t count;
+    stim_cb_t cb;          /**< Expiration callback function */
+    void *user_data;       /**< User-provided data pointer */
+    uint32_t expiry_ticks; /**< Absolute expiration time (internal use) */
+    uint32_t period_ticks; /**< Timer period in system ticks */
+    uint32_t count;        /**< Number of times this timer has expired */
+    /**
+     * @brief Timer state
+     *
+     * STIM_DISABLE  - timer not active
+     * STIM_ENABLE   - timer active
+     */
     enum {
         STIM_DISABLE = 0,
         STIM_ENABLE = 1,
     } state;
-    stim_node_t node;
+    stim_node_t node; /**< Intrusive list node (internal use) */
 } stim_t;
 
 /**
  * @brief Increment the system tick counter
- * @note This function should be called periodically to advance the timer base
+ *
+ * This function advances the internal time base.
+ *
+ * @note Typically called from:
+ *       - SysTick interrupt
+ *       - Hardware timer ISR
+ *
+ * This function must be called periodically.
  */
 void stim_systick_inc(void);
 
+/**
+ * @brief Initialize a timer instance
+ *
+ * This function must be called before using the timer.
+ *
+ * @param timer        Pointer to timer object
+ * @param period_ticks Period in system ticks (1 ~ STIM_MAX_TICKS)
+ * @param cb           Expiration callback
+ * @param user_data    User-defined pointer passed to callback
+ *
+ * @return 0 on success
+ * @return -1 on invalid parameter
+ */
 int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_t cb,
               void *user_data);
 
 /**
  * @brief Start the specified timer
- * @note The timer will be inserted into the active timer list sorted by
- * remaining time
  *
- * @param timer Handle of the timer to start
+ * The timer will be scheduled and inserted into the active list.
+ *
+ * @note This function is thread/ISR safe.
+ * @note If command queue is full, returns -1.
+ *
+ * @param timer Timer to start
+ *
+ * @return 0 on success
+ * @return -1 on error
  */
 int stim_start(stim_t *timer);
 
 /**
  * @brief Stop the specified timer
- * @note This function removes the timer from the active timer list
  *
- * @param timer Handle of the timer to stop
+ * Removes the timer from the active list.
+ *
+ * @note This function is thread/ISR safe.
+ * @note If command queue is full, returns -1.
+ *
+ * @param timer Timer to stop
+ *
+ * @return 0 on success
+ * @return -1 on error
  */
 int stim_stop(stim_t *timer);
 
 /**
- * @brief Process timer expiration events
- * @note This function should be called periodically to handle expired timers
+ * @brief Process timer events
+ *
+ * This function:
+ *  - Handles pending start/stop commands
+ *  - Checks expired timers
+ *  - Executes expiration callbacks
+ *
+ * @warning Must NOT be called concurrently.
+ * @note Should be called periodically from main loop or timer task.
  */
 void stim_handler(void);
 
 /**
- * @brief Register or update the callback function for a timer
+ * @brief Register or update timer callback
  *
- * @param timer Handle of the target timer
- * @param cb New callback function to be registered
- * @param user_data User data to be passed to the callback function
+ * Can be used to change callback function at runtime.
+ *
+ * @param timer Target timer
+ * @param cb New callback
+ * @param user_data User data pointer
  */
 void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data);
 
 /**
- * @brief Set the period for the specified timer
- * @note The period parameter must be in the range [1, STIM_MAX_TICKS]
- *       If the period is outside this range, the function returns -1
+ * @brief Set timer period
  *
- * @param timer Handle of the target timer
- * @param period_ticks New timer period in system ticks
+ * @note Does NOT automatically restart the timer.
+ * @note If timer is running, new period takes effect after next expiration.
+ *
+ * @param timer Target timer
+ * @param period_ticks New period
  */
 void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks);
 
 /**
- * @brief Set timer count value
+ * @brief Set timer expiration count value
  *
- * @param timer Handle of the target timer
+ * @param timer Target timer
  * @param count New count value
  */
 void stim_set_count(stim_t *timer, uint32_t count);
 
 /**
- * @brief Get current timer count value
+ * @brief Get timer expiration count
  *
- * @param timer Handle of the target timer
- * @return
- * Current count value of timer, always 0 for invalid handle
+ * @param timer Target timer
+ * @return Number of expirations since initialization
  */
 uint32_t stim_get_count(stim_t *timer);
 

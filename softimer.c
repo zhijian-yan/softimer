@@ -27,9 +27,9 @@ static stim_node_t head = {
     .prev = &head,
 };
 static stim_cmd_t stim_cmd_arr[STIM_CMD_ARR_SIZE];
-volatile static uint32_t stim_systicks = 0;
-volatile static uint32_t stim_cmd_head = 0;
-volatile static uint32_t stim_cmd_tail = 0;
+static uint32_t stim_systicks = 0;
+static uint32_t stim_cmd_head = 0;
+static uint32_t stim_cmd_tail = 0;
 
 void stim_systick_inc(void) { ++stim_systicks; }
 
