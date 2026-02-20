@@ -4,6 +4,10 @@
 #include "softimer.h"
 #include <string.h>
 
+#if (STIM_CMD_ARR_SIZE & (STIM_CMD_ARR_SIZE - 1)) != 0
+#error "STIM_CMD_ARR_SIZE must be power of two"
+#endif
+
 #define container_of(ptr, type, member)                                        \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
@@ -45,6 +49,14 @@ volatile static uint32_t stim_cmd_tail = 0;
 
 void stim_systick_inc(void) { ++stim_systicks; }
 
+static inline uint32_t stim_get_systicks(void) {
+    uint32_t now;
+    STIM_ENTER_CRITICAL;
+    now = stim_systicks;
+    STIM_EXIT_CRITICAL;
+    return now;
+}
+
 stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
                           void *user_data) {
     stim_t *stim = NULL;
@@ -72,9 +84,8 @@ void stim_delete(stim_handle_t timer) {
     STIM_FREE(stim);
 }
 
-static void stim_list_add(stim_handle_t timer) {
+static void stim_list_add(stim_handle_t timer, uint32_t now) {
     stim_t *entry;
-    uint32_t now = stim_systicks;
     stim_node_t *pos;
     stim_node_t *node = &timer->node;
     if (node->next != node)
@@ -104,7 +115,7 @@ static void stim_list_del(stim_handle_t timer) {
 
 static int stim_cmd_push(stim_t *stim, uint32_t type) {
     uint32_t next_head;
-    next_head = (stim_cmd_head + 1) % STIM_CMD_ARR_SIZE;
+    next_head = (stim_cmd_head + 1) & (STIM_CMD_ARR_SIZE - 1);
     if (next_head == stim_cmd_tail) {
         return -1;
     }
@@ -146,6 +157,7 @@ int stim_stop(stim_handle_t timer) {
 
 static void stim_cmd_handler(void) {
     stim_cmd_t cmd;
+    uint32_t now;
     while (1) {
         STIM_ENTER_CRITICAL;
         if (stim_cmd_head == stim_cmd_tail) {
@@ -153,12 +165,13 @@ static void stim_cmd_handler(void) {
             return;
         }
         cmd = stim_cmd_arr[stim_cmd_tail];
-        stim_cmd_tail = (stim_cmd_tail + 1) % STIM_CMD_ARR_SIZE;
+        stim_cmd_tail = (stim_cmd_tail + 1) & (STIM_CMD_ARR_SIZE - 1);
         STIM_EXIT_CRITICAL;
         switch (cmd.type) {
         case STIM_CMD_START:
-            cmd.stim->expiry_ticks = cmd.stim->period_ticks + stim_systicks;
-            stim_list_add(cmd.stim);
+            now = stim_get_systicks();
+            cmd.stim->expiry_ticks = cmd.stim->period_ticks + now;
+            stim_list_add(cmd.stim, now);
             break;
         case STIM_CMD_STOP:
             stim_list_del(cmd.stim);
@@ -172,11 +185,9 @@ static void stim_cmd_handler(void) {
 void stim_handler(void) {
     stim_t *expired;
     uint32_t now;
-    stim_node_t *first;
     stim_cmd_handler();
-    now = stim_systicks;
+    now = stim_get_systicks();
     while (head.next != &head) {
-        first = head.next;
         expired = container_of(head.next, stim_t, node);
         if ((int32_t)(expired->expiry_ticks - now) <= 0) {
             stim_list_del(expired);
@@ -185,7 +196,7 @@ void stim_handler(void) {
                 expired->cb(expired, expired->user_data);
             if (expired->state == STIM_ENABLE) {
                 expired->expiry_ticks += expired->period_ticks;
-                stim_list_add(expired);
+                stim_list_add(expired, now);
             }
         } else
             break;

@@ -15,7 +15,7 @@ extern "C" {
 #define STIM_FREE(ptr) free(ptr)
 #define STIM_ENTER_CRITICAL ((void *)0)
 #define STIM_EXIT_CRITICAL ((void *)0)
-#define STIM_CMD_ARR_SIZE (10)
+#define STIM_CMD_ARR_SIZE (16) // must be power of two
 #define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 
 /**
