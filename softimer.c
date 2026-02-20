@@ -4,6 +4,14 @@
 #include "softimer.h"
 #include <string.h>
 
+#define container_of(ptr, type, member)                                        \
+    ((type *)((char *)(ptr) - offsetof(type, member)))
+
+typedef struct stim_node {
+    struct stim_node *next;
+    struct stim_node *prev;
+} stim_node_t;
+
 typedef struct stim {
     stim_cb_t cb;
     void *user_data;
@@ -14,8 +22,7 @@ typedef struct stim {
         STIM_DISABLE = 0,
         STIM_ENABLE = 1,
     } state;
-    struct stim *prev;
-    struct stim *next;
+    stim_node_t node;
 } stim_t;
 
 typedef struct {
@@ -27,7 +34,10 @@ typedef struct {
     } type;
 } stim_cmd_t;
 
-static stim_t *head = NULL;
+static stim_node_t head = {
+    .next = &head,
+    .prev = &head,
+};
 static stim_cmd_t stim_cmd_arr[STIM_CMD_ARR_SIZE];
 volatile static uint32_t stim_systicks = 0;
 volatile static uint32_t stim_cmd_head = 0;
@@ -50,8 +60,8 @@ stim_handle_t stim_create(uint32_t period_ticks, stim_cb_t cb,
     stim->cb = cb;
     stim->count = 0;
     stim->state = STIM_DISABLE;
-    stim->prev = NULL;
-    stim->next = NULL;
+    stim->node.next = &stim->node;
+    stim->node.prev = &stim->node;
     return stim;
 }
 
@@ -63,54 +73,33 @@ void stim_delete(stim_handle_t timer) {
 }
 
 static void stim_list_add(stim_handle_t timer) {
-    stim_t *stim = timer;
-    stim_t *temp = head;
+    stim_t *entry;
     uint32_t now = stim_systicks;
-    while (temp) {
-        if ((int32_t)(stim->expiry_ticks - now) <
-            (int32_t)(temp->expiry_ticks - now)) {
+    stim_node_t *pos;
+    stim_node_t *node = &timer->node;
+    if (node->next != node)
+        return;
+    for (pos = head.next; pos != &head; pos = pos->next) {
+        entry = container_of(pos, stim_t, node);
+        if ((int32_t)(timer->expiry_ticks - now) <
+            (int32_t)(entry->expiry_ticks - now)) {
             break;
         }
-        temp = temp->next;
     }
-    if (temp) {
-        stim->prev = temp->prev;
-        stim->next = temp;
-        if (temp == head)
-            head = stim;
-        else
-            temp->prev->next = stim;
-        temp->prev = stim;
-    } else {
-        if (head == NULL) {
-            head = stim;
-            head->prev = stim;
-        } else {
-            stim->prev = head->prev;
-            head->prev->next = stim;
-            head->prev = stim;
-        }
-        stim->next = NULL;
-    }
+    node->next = pos;
+    node->prev = pos->prev;
+    pos->prev->next = node;
+    pos->prev = node;
 }
 
 static void stim_list_del(stim_handle_t timer) {
-    stim_t *stim = timer;
-    if (stim == head) {
-        if (stim->next) {
-            stim->next->prev = head->prev;
-            head = stim->next;
-        } else
-            head = NULL;
-    } else {
-        stim->prev->next = stim->next;
-        if (stim->next)
-            stim->next->prev = stim->prev;
-        else
-            head->prev = stim->prev;
-    }
-    stim->prev = NULL;
-    stim->next = NULL;
+    stim_node_t *node = &timer->node;
+    if (node->next == node)
+        return;
+    node->prev->next = node->next;
+    node->next->prev = node->prev;
+    node->next = node;
+    node->prev = node;
 }
 
 static int stim_cmd_push(stim_t *stim, uint32_t type) {
@@ -127,13 +116,14 @@ static int stim_cmd_push(stim_t *stim, uint32_t type) {
 
 int stim_start(stim_handle_t timer) {
     stim_t *stim = timer;
-    int ret;
+    int ret = 0;
     if (!stim)
-        return;
+        return -1;
     STIM_ENTER_CRITICAL;
     if (stim->state == STIM_DISABLE) {
-        stim->state = STIM_ENABLE;
         ret = stim_cmd_push(stim, STIM_CMD_START);
+        if (!ret)
+            stim->state = STIM_ENABLE;
     }
     STIM_EXIT_CRITICAL;
     return ret;
@@ -141,13 +131,14 @@ int stim_start(stim_handle_t timer) {
 
 int stim_stop(stim_handle_t timer) {
     stim_t *stim = timer;
-    int ret;
+    int ret = 0;
     if (!stim)
-        return;
+        return -1;
     STIM_ENTER_CRITICAL;
     if (stim->state == STIM_ENABLE) {
-        stim->state = STIM_DISABLE;
         ret = stim_cmd_push(stim, STIM_CMD_STOP);
+        if (!ret)
+            stim->state = STIM_DISABLE;
     }
     STIM_EXIT_CRITICAL;
     return ret;
@@ -181,21 +172,23 @@ static void stim_cmd_handler(void) {
 void stim_handler(void) {
     stim_t *expired;
     uint32_t now;
+    stim_node_t *first;
     stim_cmd_handler();
     now = stim_systicks;
-    while (head) {
-        expired = head;
+    while (head.next != &head) {
+        first = head.next;
+        expired = container_of(head.next, stim_t, node);
         if ((int32_t)(expired->expiry_ticks - now) <= 0) {
             stim_list_del(expired);
             ++expired->count;
             if (expired->cb)
                 expired->cb(expired, expired->user_data);
+            if (expired->state == STIM_ENABLE) {
+                expired->expiry_ticks += expired->period_ticks;
+                stim_list_add(expired);
+            }
         } else
             break;
-        if (expired->state == STIM_ENABLE) {
-            expired->expiry_ticks += expired->period_ticks;
-            stim_list_add(expired);
-        }
     }
 }
 
