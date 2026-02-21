@@ -10,10 +10,6 @@ extern "C" {
 
 #include <stdint.h>
 
-/* ============================
- * Platform Atomic Configuration
- * ============================ */
-
 /*
  * Configuration priority:
  *
@@ -194,7 +190,7 @@ void stim_systick_inc(void);
  * This function must be called before using the timer.
  *
  * @param timer        Pointer to timer object
- * @param period_ticks Period in system ticks (1 ~ STIM_MAX_TICKS)
+ * @param period_ticks Period in system ticks [1 ~ STIM_MAX_TICKS]
  * @param cb           Expiration callback
  * @param user_data    User-defined pointer passed to callback
  *
