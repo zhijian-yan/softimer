@@ -10,6 +10,30 @@ extern "C" {
 
 #include <stdint.h>
 
+/* ============================
+ * Platform Atomic Configuration
+ * ============================ */
+
+/*
+ * Configuration priority:
+ *
+ * 1. STIM_USE_C11_ATOMIC
+ * 2. STIM_USE_CRITICAL
+ * 3. Fallback to direct access (single-thread)
+ *
+ * User must define ONE of these depending on platform.
+ */
+
+#if defined(STIM_USE_C11_ATOMIC)
+#include <stdatomic.h>
+typedef atomic_uint_fast32_t stim_tick_atomic_t;
+#elif defined(STIM_USE_CRITICAL)
+typedef uint32_t stim_tick_atomic_t;
+#else
+/* Single-thread fallback */
+typedef volatile uint32_t stim_tick_atomic_t;
+#endif
+
 /**
  * @def STIM_CMD_ARR_SIZE
  * @brief Size of internal command queue (must be power of 2)

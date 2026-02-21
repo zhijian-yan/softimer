@@ -27,19 +27,34 @@ static stim_node_t head = {
     .prev = &head,
 };
 static stim_cmd_t stim_cmd_arr[STIM_CMD_ARR_SIZE];
-static uint32_t stim_systicks = 0;
+static stim_tick_atomic_t stim_systicks = 0;
 static uint32_t stim_cmd_head = 0;
 static uint32_t stim_cmd_tail = 0;
 
-void stim_systick_inc(void) { ++stim_systicks; }
+void stim_systick_inc(void) {
+#if defined(STIM_USE_C11_ATOMIC)
+    atomic_fetch_add_explicit(&stim_systicks, 1, memory_order_relaxed);
+#elif defined(STIM_USE_CRITICAL)
+    stim_irq_state_t irq_state = stim_enter_critical();
+    ++stim_systicks;
+    stim_exit_critical(irq_state);
+#else
+    ++stim_systicks;
+#endif
+}
 
-static inline uint32_t stim_get_systicks(void) {
+static uint32_t stim_get_systicks(void) {
+#if defined(STIM_USE_C11_ATOMIC)
+    return atomic_load_explicit(&stim_systicks, memory_order_relaxed);
+#elif defined(STIM_USE_CRITICAL)
     uint32_t now;
-    stim_irq_state_t irq_state;
-    irq_state = stim_enter_critical();
+    stim_irq_state_t irq_state = stim_enter_critical();
     now = stim_systicks;
     stim_exit_critical(irq_state);
     return now;
+#else
+    return stim_systicks;
+#endif
 }
 
 int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_t cb,
