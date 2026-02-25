@@ -114,11 +114,9 @@ static inline void stim_exit_critical(stim_irq_state_t irq_state) {
 }
 
 /**
- * @brief Opaque handle type for timer instances
- *
- * Users should treat this as a handle.
+ * @brief Forward declaration of timer type
  */
-typedef struct stim *stim_handle_t;
+typedef struct stim stim_t;
 
 /**
  * @brief Timer expiration callback function type
@@ -131,7 +129,7 @@ typedef struct stim *stim_handle_t;
  * @param timer     Handle of the expired timer
  * @param user_data User-defined data pointer
  */
-typedef void (*stim_cb_t)(stim_handle_t timer, void *user_data);
+typedef void (*stim_cb_t)(stim_t *timer, void *user_data);
 
 /**
  * @brief Internal intrusive list node
@@ -144,6 +142,14 @@ typedef struct stim_node {
 } stim_node_t;
 
 /**
+ * @brief Timer state
+ */
+typedef enum {
+    STIM_DISABLE = 0, /**< Timer not active */
+    STIM_ENABLE = 1,  /**< Timer active */
+} stim_state_t;
+
+/**
  * @brief Timer object structure
  *
  * Users must allocate this structure (static or dynamic).
@@ -152,24 +158,15 @@ typedef struct stim_node {
  *
  * Internal fields MUST NOT be modified directly by user code.
  */
-typedef struct stim {
+struct stim {
     stim_cb_t cb;          /**< Expiration callback function */
     void *user_data;       /**< User-provided data pointer */
     uint32_t expiry_ticks; /**< Absolute expiration time (internal use) */
     uint32_t period_ticks; /**< Timer period in system ticks */
     uint32_t count;        /**< Number of times this timer has expired */
-    /**
-     * @brief Timer state
-     *
-     * STIM_DISABLE  - timer not active
-     * STIM_ENABLE   - timer active
-     */
-    enum {
-        STIM_DISABLE = 0,
-        STIM_ENABLE = 1,
-    } state;
-    stim_node_t node; /**< Intrusive list node (internal use) */
-} stim_t;
+    stim_state_t state;    /**< Timer state */
+    stim_node_t node;      /**< Intrusive list node (internal use) */
+};
 
 /**
  * @brief Increment the system tick counter

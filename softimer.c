@@ -166,7 +166,7 @@ static void stim_cmd_handler(void) {
             stim_list_del(cmd.stim);
             break;
         default:
-            return;
+            break;
         }
     }
 }
