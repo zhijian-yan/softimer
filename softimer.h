@@ -31,29 +31,6 @@ typedef volatile uint32_t stim_tick_atomic_t;
 #endif
 
 /**
- * @def STIM_CMD_ARR_SIZE
- * @brief Size of internal command queue (must be power of 2)
- *
- * This defines the capacity of the internal start/stop command ring buffer.
- * Increasing this value allows more concurrent start/stop requests before
- * overflow occurs.
- *
- * Must be a power of 2.
- */
-#define STIM_CMD_ARR_SIZE (16)
-
-/**
- * @def STIM_MAX_TICKS
- * @brief Maximum supported tick interval
- *
- * Timers must use period values in range:
- *      [1, STIM_MAX_TICKS]
- *
- * The value is chosen to ensure safe signed wrap-around comparison.
- */
-#define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
-
-/**
  * @brief Platform-defined interrupt state type
  *
  * This type represents the CPU interrupt state that must be saved and
@@ -114,6 +91,29 @@ static inline void stim_exit_critical(stim_irq_state_t irq_state) {
 }
 
 /**
+ * @def STIM_CMD_ARR_SIZE
+ * @brief Size of internal command queue (must be power of 2)
+ *
+ * This defines the capacity of the internal start/stop command ring buffer.
+ * Increasing this value allows more concurrent start/stop requests before
+ * overflow occurs.
+ *
+ * Must be a power of 2.
+ */
+#define STIM_CMD_ARR_SIZE (16)
+
+/**
+ * @def STIM_MAX_TICKS
+ * @brief Maximum supported tick interval
+ *
+ * Timers must use period values in range:
+ *      [1, STIM_MAX_TICKS]
+ *
+ * The value is chosen to ensure safe signed wrap-around comparison.
+ */
+#define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
+
+/**
  * @brief Forward declaration of timer type
  */
 typedef struct stim stim_t;
@@ -132,6 +132,20 @@ typedef struct stim stim_t;
 typedef void (*stim_cb_t)(stim_t *timer, void *user_data);
 
 /**
+ * @brief Timer state
+ */
+typedef enum {
+    STIM_DISABLE = 0, /**< Timer not active */
+    STIM_ENABLE = 1,  /**< Timer active */
+} stim_state_t;
+
+typedef enum {
+    STIM_ERR_NULL_PTR = 1,
+    STIM_ERR_INVALID_PARAM,
+    STIM_ERR_QUEUE_FULL,
+} stim_err_t;
+
+/**
  * @brief Internal intrusive list node
  *
  * Used to link active timers in a doubly-linked sorted list.
@@ -140,14 +154,6 @@ typedef struct stim_node {
     struct stim_node *next;
     struct stim_node *prev;
 } stim_node_t;
-
-/**
- * @brief Timer state
- */
-typedef enum {
-    STIM_DISABLE = 0, /**< Timer not active */
-    STIM_ENABLE = 1,  /**< Timer active */
-} stim_state_t;
 
 /**
  * @brief Timer object structure
@@ -249,7 +255,7 @@ void stim_handler(void);
  * @param cb New callback
  * @param user_data User data pointer
  */
-void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data);
+int stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data);
 
 /**
  * @brief Set timer period
@@ -260,7 +266,7 @@ void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data);
  * @param timer Target timer
  * @param period_ticks New period
  */
-void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks);
+int stim_set_period_ticks(stim_t *timer, uint32_t period_ticks);
 
 /**
  * @brief Set timer expiration count value
@@ -268,7 +274,7 @@ void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks);
  * @param timer Target timer
  * @param count New count value
  */
-void stim_set_count(stim_t *timer, uint32_t count);
+int stim_set_count(stim_t *timer, uint32_t count);
 
 /**
  * @brief Get timer expiration count

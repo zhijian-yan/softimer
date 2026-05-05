@@ -8,6 +8,8 @@
 #error "STIM_CMD_ARR_SIZE must be power of 2"
 #endif
 
+#define STIM_TICK_OUT_OF_RANGE(tick) (tick > STIM_MAX_TICKS || tick == 0)
+
 #define container_of(ptr, type, member)                                        \
     ((type *)((char *)(ptr) - offsetof(type, member)))
 
@@ -59,8 +61,10 @@ static uint32_t stim_get_systicks(void) {
 
 int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_t cb,
               void *user_data) {
-    if (!timer || period_ticks > STIM_MAX_TICKS || period_ticks == 0)
-        return -1;
+    if (!timer)
+        return -STIM_ERR_NULL_PTR;
+    if (STIM_TICK_OUT_OF_RANGE(period_ticks))
+        return -STIM_ERR_INVALID_PARAM;
     timer->period_ticks = period_ticks;
     timer->expiry_ticks = 0;
     timer->user_data = user_data;
@@ -105,7 +109,7 @@ static int stim_cmd_push(stim_t *timer, stim_cmd_type_t type) {
     uint32_t next_head;
     next_head = (stim_cmd_head + 1) & (STIM_CMD_ARR_SIZE - 1);
     if (next_head == stim_cmd_tail) {
-        return -1;
+        return -STIM_ERR_QUEUE_FULL;
     }
     stim_cmd_arr[stim_cmd_head].stim = timer;
     stim_cmd_arr[stim_cmd_head].type = type;
@@ -117,7 +121,7 @@ int stim_start(stim_t *timer) {
     stim_irq_state_t irq_state;
     int ret = 0;
     if (!timer)
-        return -1;
+        return -STIM_ERR_NULL_PTR;
     irq_state = stim_enter_critical();
     if (timer->state == STIM_DISABLE) {
         ret = stim_cmd_push(timer, STIM_CMD_START);
@@ -132,7 +136,7 @@ int stim_stop(stim_t *timer) {
     stim_irq_state_t irq_state;
     int ret = 0;
     if (!timer)
-        return -1;
+        return -STIM_ERR_NULL_PTR;
     irq_state = stim_enter_critical();
     if (timer->state == STIM_ENABLE) {
         ret = stim_cmd_push(timer, STIM_CMD_STOP);
@@ -192,25 +196,28 @@ void stim_handler(void) {
     }
 }
 
-void stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data) {
+int stim_register_callback(stim_t *timer, stim_cb_t cb, void *user_data) {
     if (!timer)
-        return;
+        return -STIM_ERR_NULL_PTR;
     timer->user_data = user_data;
     timer->cb = cb;
+    return 0;
 }
 
-void stim_set_period_ticks(stim_t *timer, uint32_t period_ticks) {
+int stim_set_period_ticks(stim_t *timer, uint32_t period_ticks) {
     if (!timer)
-        return;
-    if (period_ticks > STIM_MAX_TICKS || period_ticks == 0)
-        return;
+        return -STIM_ERR_NULL_PTR;
+    if (STIM_TICK_OUT_OF_RANGE(period_ticks))
+        return -STIM_ERR_INVALID_PARAM;
     timer->period_ticks = period_ticks;
+    return 0;
 }
 
-void stim_set_count(stim_t *timer, uint32_t count) {
+int stim_set_count(stim_t *timer, uint32_t count) {
     if (!timer)
-        return;
+        return -STIM_ERR_NULL_PTR;
     timer->count = count;
+    return 0;
 }
 
 uint32_t stim_get_count(stim_t *timer) {
