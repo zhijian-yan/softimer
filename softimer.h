@@ -41,7 +41,7 @@ typedef enum {
 } stim_state_t;
 
 typedef enum {
-    STIM_QUEUE_DEFERED,
+    STIM_MODE_DEFERED,
     STIM_MODE_IMMEDIATE,
 } stim_mode_t;
 
