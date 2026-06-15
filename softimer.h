@@ -20,6 +20,8 @@ static inline void stim_unlock(int stim_lock_state) {
     (void)stim_lock_state;
 }
 
+#define STIM_ATOMIC_TICKS
+
 #define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 #define STIM_QUEUE_SIZE (16)
 #if (STIM_QUEUE_SIZE > 256)
@@ -41,7 +43,7 @@ typedef enum {
 } stim_state_t;
 
 typedef enum {
-    STIM_MODE_DEFERED,
+    STIM_MODE_DEFERRED,
     STIM_MODE_IMMEDIATE,
 } stim_mode_t;
 

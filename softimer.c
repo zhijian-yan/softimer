@@ -35,112 +35,134 @@ static stim_queue_t stim_command_queue;
 static stim_queue_t stim_expired_queue;
 
 void stim_tick_inc(void) {
+#ifdef STIM_ATOMIC_TICKS
+    ++stim_ticks;
+#else
     int stim_lock_state;
     stim_lock_state = stim_lock();
     ++stim_ticks;
     stim_unlock(stim_lock_state);
+#endif
 }
 
 uint32_t stim_get_ticks(void) {
+#ifdef STIM_ATOMIC_TICKS
+    return stim_ticks;
+#else
     uint32_t ticks;
     int stim_lock_state;
     stim_lock_state = stim_lock();
     ticks = stim_ticks;
     stim_unlock(stim_lock_state);
     return ticks;
+#endif
 }
 
 static int stim_queue_send(stim_queue_t *queue, const stim_message_t *message) {
+    int stim_lock_state;
+    int ret = 0;
     uint8_t w;
     uint8_t next;
+    stim_lock_state = stim_lock();
     w = queue->write_index;
     next = (w + 1) & (STIM_QUEUE_SIZE - 1);
-    if (next == queue->read_index)
-        return -STIM_EAGAIN;
-    queue->buffer[w] = *message;
-    queue->write_index = next;
-    return 0;
+    if (next != queue->read_index) {
+        queue->buffer[w] = *message;
+        queue->write_index = next;
+        stim_unlock(stim_lock_state);
+    } else {
+        ret = -STIM_EAGAIN;
+    }
+    stim_unlock(stim_lock_state);
+    return ret;
 }
 
 static int stim_queue_receive(stim_queue_t *queue, stim_message_t *message) {
+    int stim_lock_state;
+    int ret = 0;
     uint8_t r;
+    stim_lock_state = stim_lock();
     r = queue->read_index;
-    if (r == queue->write_index)
-        return -STIM_EAGAIN;
-    *message = queue->buffer[r];
-    queue->read_index = (r + 1) & (STIM_QUEUE_SIZE - 1);
-    return 0;
-}
-
-int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
-              stim_cb_t cb, void *user_data) {
-    if (!timer || STIM_TICK_OUT_OF_RANGE(period_ticks))
-        return -STIM_EINVAL;
-    memset(timer, 0, sizeof(stim_t));
-    timer->period_ticks = period_ticks;
-    timer->cb = cb;
-    timer->user_data = user_data;
-    timer->mode = mode;
-    timer->state = STIM_STATE_STOPPED;
-    timer->node.next = &timer->node;
-    timer->node.prev = &timer->node;
-    return 0;
+    if (r != queue->write_index) {
+        *message = queue->buffer[r];
+        queue->read_index = (r + 1) & (STIM_QUEUE_SIZE - 1);
+    } else {
+        ret = -STIM_EAGAIN;
+    }
+    stim_unlock(stim_lock_state);
+    return ret;
 }
 
 static void stim_list_add(stim_t *timer, uint32_t now) {
     stim_t *entry;
     stim_node_t *pos;
     stim_node_t *node = &timer->node;
-    if (node->next != node)
-        return;
-    for (pos = list.next; pos != &list; pos = pos->next) {
-        entry = container_of(pos, stim_t, node);
-        if ((int32_t)(timer->expire_ticks - now) <
-            (int32_t)(entry->expire_ticks - now)) {
-            break;
+    if (node->next == node) {
+        for (pos = list.next; pos != &list; pos = pos->next) {
+            entry = container_of(pos, stim_t, node);
+            if ((int32_t)(timer->expire_ticks - now) <
+                (int32_t)(entry->expire_ticks - now)) {
+                break;
+            }
         }
+        node->next = pos;
+        node->prev = pos->prev;
+        pos->prev->next = node;
+        pos->prev = node;
     }
-    node->next = pos;
-    node->prev = pos->prev;
-    pos->prev->next = node;
-    pos->prev = node;
 }
 
 static void stim_list_del(stim_t *timer) {
     stim_node_t *node = &timer->node;
-    if (node->next == node)
-        return;
-    node->prev->next = node->next;
-    node->next->prev = node->prev;
-    node->next = node;
-    node->prev = node;
+    if (node->next != node) {
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
+        node->next = node;
+        node->prev = node;
+    }
+}
+
+int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
+              stim_cb_t cb, void *user_data) {
+    int ret = 0;
+    if (!timer || STIM_TICK_OUT_OF_RANGE(period_ticks)) {
+        ret = -STIM_EINVAL;
+    } else {
+        memset(timer, 0, sizeof(stim_t));
+        timer->period_ticks = period_ticks;
+        timer->cb = cb;
+        timer->user_data = user_data;
+        timer->mode = mode;
+        timer->state = STIM_STATE_STOPPED;
+        timer->node.next = &timer->node;
+        timer->node.prev = &timer->node;
+    }
+    return ret;
 }
 
 int stim_start(stim_t *timer) {
-    int stim_lock_state;
     stim_message_t message;
     int ret = 0;
-    if (!timer)
-        return -STIM_EINVAL;
-    message.timer = timer;
-    message.command = STIM_COMMAND_START;
-    stim_lock_state = stim_lock();
-    ret = stim_queue_send(&stim_command_queue, &message);
-    stim_unlock(stim_lock_state);
+    if (timer) {
+        message.timer = timer;
+        message.command = STIM_COMMAND_START;
+        ret = stim_queue_send(&stim_command_queue, &message);
+    } else {
+        ret = -STIM_EINVAL;
+    }
     return ret;
 }
 
 int stim_stop(stim_t *timer) {
-    int stim_lock_state;
     stim_message_t message;
     int ret = 0;
-    if (!timer)
-        return -STIM_EINVAL;
-    message.timer = timer;
-    message.command = STIM_COMMAND_STOP;
-    stim_lock_state = stim_lock();
-    ret = stim_queue_send(&stim_command_queue, &message);
-    stim_unlock(stim_lock_state);
+    if (timer) {
+        message.timer = timer;
+        message.command = STIM_COMMAND_STOP;
+        ret = stim_queue_send(&stim_command_queue, &message);
+    } else {
+        ret = -STIM_EINVAL;
+    }
     return ret;
 }
 
@@ -184,8 +206,9 @@ int stim_poll(void) {
                     ret = stim_queue_send(&stim_expired_queue, &message);
                 }
             }
-        } else
+        } else {
             break;
+        }
     }
     return ret;
 }
@@ -193,26 +216,33 @@ int stim_poll(void) {
 void stim_dispatch(void) {
     stim_message_t message;
     while (!stim_queue_receive(&stim_expired_queue, &message))
-        if (message.timer->cb)
+        if (message.timer->cb) {
             message.timer->cb(message.timer, message.timer->user_data);
+        }
 }
 
 int stim_set_count(stim_t *timer, uint32_t count) {
     int stim_lock_state;
-    if (!timer)
-        return -STIM_EINVAL;
-    stim_lock_state = stim_lock();
-    timer->count = count;
-    stim_unlock(stim_lock_state);
-    return 0;
+    int ret = 0;
+    if (timer) {
+        stim_lock_state = stim_lock();
+        timer->count = count;
+        stim_unlock(stim_lock_state);
+    } else {
+        ret = -STIM_EINVAL;
+    }
+    return ret;
 }
 
 int stim_get_count(const stim_t *timer, uint32_t *count) {
     int stim_lock_state;
-    if (!timer || !count)
-        return -STIM_EINVAL;
-    stim_lock_state = stim_lock();
-    *count = timer->count;
-    stim_unlock(stim_lock_state);
-    return 0;
+    int ret = 0;
+    if (timer && count) {
+        stim_lock_state = stim_lock();
+        *count = timer->count;
+        stim_unlock(stim_lock_state);
+    } else {
+        ret = -STIM_EINVAL;
+    }
+    return ret;
 }
