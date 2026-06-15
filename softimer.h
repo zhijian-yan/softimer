@@ -43,9 +43,9 @@ typedef enum {
 } stim_state_t;
 
 typedef enum {
-    STIM_MODE_DEFERRED,
-    STIM_MODE_IMMEDIATE,
-} stim_mode_t;
+    STIM_CB_MODE_DEFERRED,
+    STIM_CB_MODE_IMMEDIATE,
+} stim_cb_mode_t;
 
 typedef struct stim_node {
     struct stim_node *next;
@@ -56,8 +56,8 @@ struct stim {
     stim_node_t node;
     stim_cb_t cb;
     void *user_data;
+    stim_cb_mode_t cb_mode;
     stim_state_t state;
-    stim_mode_t mode;
     uint32_t expire_ticks;
     uint32_t period_ticks;
     volatile uint32_t count;
@@ -65,7 +65,7 @@ struct stim {
 
 void stim_tick_inc(void);
 uint32_t stim_get_ticks(void);
-int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
+int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_mode_t cb_mode,
               stim_cb_t cb, void *user_data);
 int stim_start(stim_t *timer);
 int stim_stop(stim_t *timer);

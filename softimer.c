@@ -122,7 +122,7 @@ static void stim_list_del(stim_t *timer) {
     }
 }
 
-int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
+int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_mode_t cb_mode,
               stim_cb_t cb, void *user_data) {
     int ret = 0;
     if (!timer || STIM_TICK_OUT_OF_RANGE(period_ticks)) {
@@ -132,7 +132,7 @@ int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
         timer->period_ticks = period_ticks;
         timer->cb = cb;
         timer->user_data = user_data;
-        timer->mode = mode;
+        timer->cb_mode = cb_mode;
         timer->state = STIM_STATE_STOPPED;
         timer->node.next = &timer->node;
         timer->node.prev = &timer->node;
@@ -199,7 +199,7 @@ int stim_poll(void) {
             stim_unlock(stim_lock_state);
             stim_list_add(timer, now);
             if (timer->cb) {
-                if (timer->mode == STIM_MODE_IMMEDIATE) {
+                if (timer->cb_mode == STIM_CB_MODE_IMMEDIATE) {
                     timer->cb(timer, timer->user_data);
                 } else {
                     message.timer = timer;
