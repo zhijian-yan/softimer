@@ -66,12 +66,12 @@ static int stim_queue_send(stim_queue_t *queue, const stim_message_t *message) {
     stim_lock_state = stim_lock();
     w = queue->write_index;
     next = (w + 1) & (STIM_QUEUE_SIZE - 1);
-    if (next != queue->read_index) {
+    if (next == queue->read_index) {
+        ret = -STIM_EAGAIN;
+    } else {
         queue->buffer[w] = *message;
         queue->write_index = next;
         stim_unlock(stim_lock_state);
-    } else {
-        ret = -STIM_EAGAIN;
     }
     stim_unlock(stim_lock_state);
     return ret;
@@ -83,11 +83,11 @@ static int stim_queue_receive(stim_queue_t *queue, stim_message_t *message) {
     uint8_t r;
     stim_lock_state = stim_lock();
     r = queue->read_index;
-    if (r != queue->write_index) {
+    if (r == queue->write_index) {
+        ret = -STIM_EAGAIN;
+    } else {
         *message = queue->buffer[r];
         queue->read_index = (r + 1) & (STIM_QUEUE_SIZE - 1);
-    } else {
-        ret = -STIM_EAGAIN;
     }
     stim_unlock(stim_lock_state);
     return ret;
@@ -141,27 +141,27 @@ int stim_init(stim_t *timer, uint32_t period_ticks, stim_mode_t mode,
 }
 
 int stim_start(stim_t *timer) {
-    stim_message_t message;
     int ret = 0;
-    if (timer) {
+    stim_message_t message;
+    if (!timer) {
+        ret = -STIM_EINVAL;
+    } else {
         message.timer = timer;
         message.command = STIM_COMMAND_START;
         ret = stim_queue_send(&stim_command_queue, &message);
-    } else {
-        ret = -STIM_EINVAL;
     }
     return ret;
 }
 
 int stim_stop(stim_t *timer) {
-    stim_message_t message;
     int ret = 0;
-    if (timer) {
+    stim_message_t message;
+    if (!timer) {
+        ret = -STIM_EINVAL;
+    } else {
         message.timer = timer;
         message.command = STIM_COMMAND_STOP;
         ret = stim_queue_send(&stim_command_queue, &message);
-    } else {
-        ret = -STIM_EINVAL;
     }
     return ret;
 }
@@ -183,10 +183,10 @@ static void stim_process_commands(uint32_t now) {
 }
 
 int stim_poll(void) {
-    stim_t *timer;
     int stim_lock_state;
-    stim_message_t message;
     int ret = 0;
+    stim_t *timer;
+    stim_message_t message;
     uint32_t now = stim_get_ticks();
     stim_process_commands(now);
     while (list.next != &list) {
@@ -224,12 +224,12 @@ void stim_dispatch(void) {
 int stim_set_count(stim_t *timer, uint32_t count) {
     int stim_lock_state;
     int ret = 0;
-    if (timer) {
+    if (!timer) {
+        ret = -STIM_EINVAL;
+    } else {
         stim_lock_state = stim_lock();
         timer->count = count;
         stim_unlock(stim_lock_state);
-    } else {
-        ret = -STIM_EINVAL;
     }
     return ret;
 }
@@ -237,12 +237,12 @@ int stim_set_count(stim_t *timer, uint32_t count) {
 int stim_get_count(const stim_t *timer, uint32_t *count) {
     int stim_lock_state;
     int ret = 0;
-    if (timer && count) {
+    if (!timer || !count) {
+        ret = -STIM_EINVAL;
+    } else {
         stim_lock_state = stim_lock();
         *count = timer->count;
         stim_unlock(stim_lock_state);
-    } else {
-        ret = -STIM_EINVAL;
     }
     return ret;
 }

@@ -56,10 +56,10 @@ struct stim {
     stim_node_t node;
     stim_cb_t cb;
     void *user_data;
+    stim_state_t state;
+    stim_mode_t mode;
     uint32_t expire_ticks;
     uint32_t period_ticks;
-    stim_mode_t mode;
-    stim_state_t state;
     volatile uint32_t count;
 };
 
