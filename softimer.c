@@ -199,11 +199,11 @@ int stim_poll(void) {
             stim_unlock(stim_lock_state);
             stim_list_add(timer, now);
             if (timer->cb) {
-                if (timer->mode == STIM_MODE_IMMEDIATE)
+                if (timer->mode == STIM_MODE_IMMEDIATE) {
                     timer->cb(timer, timer->user_data);
-                else {
+                } else {
                     message.timer = timer;
-                    ret = stim_queue_send(&stim_expired_queue, &message);
+                    ret |= stim_queue_send(&stim_expired_queue, &message);
                 }
             }
         } else {
