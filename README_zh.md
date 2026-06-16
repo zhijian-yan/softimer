@@ -31,8 +31,8 @@ git submodule add https://github.com/xxx/softimer.git
 
 将以下文件加入工程：
 
-* softimer.c
-* softimer.h
+* `softimer.c`
+* `softimer.h`
 
 ## 快速开始
 

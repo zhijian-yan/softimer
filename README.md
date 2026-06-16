@@ -31,8 +31,8 @@ git submodule add https://github.com/xxx/softimer.git
 
 Add the following files to your project:
 
-* softimer.c
-* softimer.h
+* `softimer.c`
+* `softimer.h`
 
 ## Quick Start
 
@@ -515,7 +515,7 @@ int stim_get_count(const stim_t *timer, uint32_t *count);
 
 Get the timer event count.
 
-## Configuration Macros
+## Macros
 
 ### STIM_ATOMIC_TICKS
 
@@ -524,8 +524,6 @@ Indicates whether system tick reads and writes are atomic.
 Typically enabled on 32-bit and 64-bit platforms.
 
 For 8-bit and 16-bit platforms, this macro should be undefined.
-
----
 
 ### STIM_QUEUE_SIZE
 
@@ -538,19 +536,13 @@ Requirements:
 
 Default value:`16`
 
----
-
 ### STIM_MAX_TICKS
 
 Maximum allowed timer period.
 
----
-
 ### STIM_EINVAL
 
 Invalid parameter error code.
-
----
 
 ### STIM_EAGAIN
 
