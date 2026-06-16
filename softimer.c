@@ -45,7 +45,7 @@ void stim_tick_inc(void) {
 #endif
 }
 
-uint32_t stim_get_ticks(void) {
+static uint32_t stim_get_ticks(void) {
 #ifdef STIM_ATOMIC_TICKS
     return stim_ticks;
 #else

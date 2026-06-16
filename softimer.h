@@ -64,7 +64,6 @@ struct stim {
 };
 
 void stim_tick_inc(void);
-uint32_t stim_get_ticks(void);
 int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_mode_t cb_mode,
               stim_cb_t cb, void *user_data);
 int stim_start(stim_t *timer);
