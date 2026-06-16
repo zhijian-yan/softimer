@@ -21,8 +21,6 @@ static inline void stim_unlock(int stim_lock_state) {
 }
 
 #define STIM_ATOMIC_TICKS
-
-#define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 #define STIM_QUEUE_SIZE (16)
 #if (STIM_QUEUE_SIZE > 256)
 #error "STIM_QUEUE_SIZE must be <= 256"
@@ -30,6 +28,7 @@ static inline void stim_unlock(int stim_lock_state) {
 #if (STIM_QUEUE_SIZE & (STIM_QUEUE_SIZE - 1)) != 0
 #error "STIM_QUEUE_SIZE must be power of 2"
 #endif
+#define STIM_MAX_TICKS (((uint32_t)(-1)) >> 1)
 #define STIM_EINVAL 22
 #define STIM_EAGAIN 11
 
