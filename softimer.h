@@ -68,7 +68,7 @@ int stim_init(stim_t *timer, uint32_t period_ticks, stim_cb_mode_t cb_mode,
 int stim_start(stim_t *timer);
 int stim_stop(stim_t *timer);
 int stim_poll(void);
-void stim_dispatch(void);
+void stim_dispatch(uint8_t max_event_num);
 int stim_set_count(stim_t *timer, uint32_t count);
 int stim_get_count(const stim_t *timer, uint32_t *count);
 

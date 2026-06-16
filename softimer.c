@@ -213,9 +213,10 @@ int stim_poll(void) {
     return ret;
 }
 
-void stim_dispatch(void) {
+void stim_dispatch(uint8_t max_event_num) {
     stim_message_t message;
-    while (!stim_queue_receive(&stim_expired_queue, &message))
+    while (max_event_num-- &&
+           !stim_queue_receive(&stim_expired_queue, &message))
         if (message.timer->cb) {
             message.timer->cb(message.timer, message.timer->user_data);
         }
