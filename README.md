@@ -45,13 +45,7 @@ stim_t timer;
 ### 2. Initialize the Timer
 
 ```c
-stim_init(
-    &timer,
-    100,
-    STIM_CB_MODE_DEFERRED,
-    timer_callback,
-    NULL
-);
+stim_init(&timer, 100, STIM_CB_MODE_DEFERRED, timer_callback, NULL);
 ```
 
 ### 3. Start the Timer
@@ -78,7 +72,7 @@ stim_poll();
 
 ```c
 while (1) {
-    stim_dispatch();
+    stim_dispatch(8);
 }
 ```
 
@@ -109,25 +103,13 @@ void systick_handler(void) {
 
 int main(void) {
     hardware_init();
-    stim_init(
-        &timer1,
-        1000,
-        STIM_CB_MODE_DEFERRED,
-        stim_callback,
-        (void *)1
-    );
-    stim_init(
-        &timer2,
-        100,
-        STIM_CB_MODE_IMMEDIATE,
-        stim_callback,
-        (void *)2
-    );
+    stim_init(&timer1, 1000, STIM_CB_MODE_DEFERRED, stim_callback, (void *)1);
+    stim_init(&timer2, 100, STIM_CB_MODE_IMMEDIATE, stim_callback, (void *)2);
     stim_start(&timer1);
     stim_start(&timer2);
     while (1) {
         stim_poll();
-        stim_dispatch();
+        stim_dispatch(8);
     }
 }
 ```
@@ -502,12 +484,16 @@ Process pending commands and check timer expiration.
 ### stim_dispatch
 
 ```c
-void stim_dispatch(void);
+void stim_dispatch(uint8_t max_event_num);
 ```
 
 Process expiration events and execute callbacks.
 
 Only applicable to `STIM_CB_MODE_DEFERRED`.
+
+**Parameters**
+
+* `max_event_num` - maximum number of events processed in a single call
 
 ---
 

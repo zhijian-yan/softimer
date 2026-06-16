@@ -45,13 +45,7 @@ stim_t timer;
 ### 2. 初始化定时器
 
 ```c
-stim_init(
-    &timer,
-    100,
-    STIM_CB_MODE_DEFERRED,
-    timer_callback,
-    NULL
-);
+stim_init(&timer, 100, STIM_CB_MODE_DEFERRED, timer_callback, NULL);
 ```
 
 ### 3. 启动定时器
@@ -78,7 +72,7 @@ stim_poll();
 
 ```c
 while (1) {
-    stim_dispatch();
+    stim_dispatch(8);
 }
 ```
 
@@ -92,7 +86,7 @@ stim_t timer1, timer2;
 
 static void stim_callback(stim_t *timer, void *user_data) {
     uint32_t count;
-    switch((int)user_data) {
+    switch ((int)user_data) {
     case 1:
         stim_get_count(timer, &count);
         printf("timer1 count:%lu\r\n", count);
@@ -115,7 +109,7 @@ int main(void) {
     stim_start(&timer2);
     while (1) {
         stim_poll();
-        stim_dispatch();
+        stim_dispatch(8);
     }
 }
 ```
@@ -481,12 +475,16 @@ int stim_poll(void);
 ### stim_dispatch
 
 ```c
-void stim_dispatch(void);
+void stim_dispatch(uint8_t max_event_num);
 ```
 
 处理到期事件队列并执行回调
 
 仅对 `STIM_CB_MODE_DEFERRED` 模式有效
+
+**参数**
+
+* `max_event_num`：单次调用处理事件的最大数量
 
 ---
 
