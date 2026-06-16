@@ -1,533 +1,571 @@
-# Softimer
+<h1 align="center">softimer</h1>
 
-A lightweight software timer library for embedded systems.
+<p align="center">
+<a href="README.md">English</a> | <a href="README_zh.md">简体中文</a>
+</p>
 
-Softimer provides a simple and efficient tick-based software timer implementation designed for bare-metal and RTOS environments.
+<p align="center">
+Lightweight Embedded Software Timer Library
+</p>
 
-Features:
+## Features
 
-- Tick-based software timer
-- Sorted linked-list scheduling
-- Deferred callback execution
-- Immediate callback execution
-- Asynchronous start/stop operations
-- Event counting support
-- Overflow-safe tick comparison
-- No dynamic memory allocation
-- Platform-independent locking abstraction
+* O(1) expiration checking
+* Ordered linked-list scheduler
+* Overflow-safe tick comparison
+* No dynamic memory allocation
+* Platform-independent lock abstraction
+* Supports deferred and immediate callbacks
+* MPSC (Multi-Producer Single-Consumer) asynchronous control
+* Event counting support
 
----
+## Installation
 
-# Design
+### Git Submodule
 
-Softimer separates timer scheduling from callback execution.
-
-```text
-                SysTick ISR
-                     |
-                     |
-             stim_tick_inc()
-                     |
-                     |
-                Main loop
-                     |
-          +----------+----------+
-          |                     |
-          |                     |
-     stim_poll()         stim_dispatch()
-          |                     |
-          |                     |
-          |               Execute callback
-          |
-          +--> Process commands
-          |
-          +--> Check expiration
-          |
-          +--> Update timer state
-          |
-          +--> Generate timer events
-                     |
-                     |
-         +-----------+-----------+
-         |                       |
-         |                       |
-Immediate callback       Deferred queue
+```bash
+git submodule add https://github.com/xxx/softimer.git
 ```
 
-This architecture keeps ISR execution lightweight while allowing both low-latency callbacks and deferred callbacks.
+### Direct Integration
 
----
+Add the following files to your project:
 
-# Callback Modes
+* softimer.c
+* softimer.h
 
-Softimer supports two callback modes.
+## Quick Start
 
-## STIM_MODE_DEFERRED
-
-The callback is queued and later executed in:
+### 1. Create a Timer
 
 ```c
-stim_dispatch();
+stim_t timer;
 ```
 
-Advantages:
-
-- Safe for long operations
-- Safe for blocking APIs
-- Safe for printf()
-- Safe for malloc()
-- Suitable for application logic
-
-Limitations:
-
-- Callback timing depends on main loop execution speed
-
-Example:
+### 2. Initialize the Timer
 
 ```c
 stim_init(
     &timer,
     100,
-    STIM_MODE_DEFERRED,
+    STIM_CB_MODE_DEFERRED,
     timer_callback,
     NULL
 );
 ```
 
----
+### 3. Start the Timer
 
-## STIM_MODE_IMMEDIATE
+```c
+stim_start(&timer);
+```
 
-The callback executes immediately inside:
+### 4. Update the System Tick
+
+```c
+void systick_handler(void) {
+    stim_tick_inc();
+}
+```
+
+### 5. Poll Timer State
 
 ```c
 stim_poll();
 ```
 
-Advantages:
-
-- Minimal latency
-- Event callbacks are not delayed
-- Suitable for time-critical operations
-
-Limitations:
-
-- Must not execute long blocking operations
-
-Avoid:
+### 6. Dispatch Timer Events
 
 ```c
-void callback(stim_t *timer, void *arg)
-{
-    printf("Hello\n");
-
-    delay_ms(100);
-
-    malloc(128);
-}
-```
-
-Recommended:
-
-```c
-void callback(stim_t *timer, void *arg)
-{
-    gpio_toggle();
-}
-```
-
----
-
-# Usage
-
-## Step 1: Create timer object
-
-```c
-stim_t led_timer;
-```
-
----
-
-## Step 2: Initialize timer
-
-```c
-stim_init(
-    &led_timer,
-    100,
-    STIM_MODE_DEFERRED,
-    led_callback,
-    NULL
-);
-```
-
-Parameters:
-
-| Parameter | Description |
-|------------|-------------|
-| timer | Timer object |
-| period_ticks | Timer period |
-| mode | Callback mode |
-| cb | Callback function |
-| user_data | User private data |
-
----
-
-## Step 3: Start timer
-
-```c
-stim_start(&led_timer);
-```
-
----
-
-## Step 4: Increment tick
-
-Call periodically from a hardware timer interrupt:
-
-```c
-void SysTick_Handler(void)
-{
-    stim_tick_inc();
-}
-```
-
----
-
-## Step 5: Poll timer system
-
-Call periodically from main loop:
-
-```c
-while (1)
-{
-    stim_poll();
-
+while (1) {
     stim_dispatch();
 }
 ```
 
----
-
-# Complete Example
+### Complete Example
 
 ```c
 #include "softimer.h"
+#include <stdio.h>
 
-static stim_t led_timer;
+stim_t timer1, timer2;
 
-static void led_callback(
-    stim_t *timer,
-    void *arg
-)
-{
-    led_toggle();
+static void stim_callback(stim_t *timer, void *user_data) {
+    uint32_t count;
+    switch ((int)user_data) {
+    case 1:
+        stim_get_count(timer, &count);
+        printf("timer1 count:%lu\r\n", count);
+        break;
+    case 2:
+        led_toggle();
+        break;
+    }
 }
 
-void SysTick_Handler(void)
-{
+void systick_handler(void) {
     stim_tick_inc();
 }
 
-int main(void)
-{
+int main(void) {
     hardware_init();
-
     stim_init(
-        &led_timer,
-        100,
-        STIM_MODE_DEFERRED,
-        led_callback,
-        NULL
+        &timer1,
+        1000,
+        STIM_CB_MODE_DEFERRED,
+        stim_callback,
+        (void *)1
     );
-
-    stim_start(&led_timer);
-
-    while (1)
-    {
+    stim_init(
+        &timer2,
+        100,
+        STIM_CB_MODE_IMMEDIATE,
+        stim_callback,
+        (void *)2
+    );
+    stim_start(&timer1);
+    stim_start(&timer2);
+    while (1) {
         stim_poll();
-
         stim_dispatch();
     }
 }
 ```
 
----
+## Design Overview
 
-# API Reference
+### Architecture
 
-## stim_init
+softimer uses an **MPSC (Multi-Producer Single-Consumer)** architecture for asynchronous timer control.
 
-Initialize a timer object.
-
-```c
-int stim_init(
-    stim_t *timer,
-    uint32_t period_ticks,
-    stim_mode_t mode,
-    stim_cb_t cb,
-    void *user_data
-);
+```text
+              SysTick ISR
+                   │
+                   ▼
+            stim_tick_inc()
+                   │
+                   ▼
+               Main Loop
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+        ▼                     ▼
+    stim_poll()        stim_dispatch()
+        │                     │
+        │                     ▼
+        │            Execute Deferred
+        │              Callbacks
+        │
+        ├── Process Commands
+        │
+        ├── Check Expiration
+        │
+        ├── Update Timer State
+        │
+        └── Generate Events
+               │
+       ┌───────┴────────┐
+       │                │
+       ▼                ▼
+ Immediate Callback  Event Queue
 ```
 
-Returns:
+All timer management logic is performed inside `stim_poll()`.
 
-```c
-0
-```
+Functions such as `stim_start()` and `stim_stop()` do not modify the timer list directly. Instead, they enqueue commands which are later processed by `stim_poll()`.
 
-Success
-
-```c
--STIM_EINVAL
-```
-
-Invalid argument
-
----
-
-## stim_start
-
-Start timer asynchronously.
-
-```c
-int stim_start(
-    stim_t *timer
-);
-```
-
-Returns:
-
-```c
-0
-```
-
-Success
-
-```c
--STIM_EAGAIN
-```
-
-Queue full
-
-```c
--STIM_EINVAL
-```
-
-Invalid argument
+This design avoids concurrent modifications to the timer list from multiple execution contexts.
 
 ---
 
-## stim_stop
+### Ordered Linked-List Scheduling
 
-Stop timer asynchronously.
+All active timers are maintained in ascending order of expiration time.
 
-```c
-int stim_stop(
-    stim_t *timer
-);
+```text
+Head
+ │
+ ▼
+TimerA(100)
+ │
+ ▼
+TimerB(200)
+ │
+ ▼
+TimerC(500)
 ```
 
-Returns:
+When starting a timer:
 
 ```c
-0
+stim_start(timer);
 ```
 
-Success
+The timer is inserted into the appropriate position to keep the list ordered.
 
-```c
--STIM_EAGAIN
-```
-
-Queue full
-
-```c
--STIM_EINVAL
-```
-
-Invalid argument
+As a result, the earliest expiring timer is always located at the head of the list.
 
 ---
 
-## stim_tick_inc
+### O(1) Expiration Check
 
-Increment internal tick counter.
+Because timers are sorted by expiration time:
 
-Usually called from a hardware timer ISR.
+```text
+Head
+ │
+ ▼
+TimerA(100)
+TimerB(200)
+TimerC(500)
+```
+
+Only the head node needs to be checked:
+
+```c
+if ((int32_t)(timer->expire_ticks - now) <= 0)
+```
+
+If the head timer has not expired, all subsequent timers must also be unexpired.
+
+Therefore, expiration checking is O(1) and does not require traversing the entire timer list.
+
+---
+
+### Overflow-Safe Tick Comparison
+
+softimer compares time using signed subtraction:
+
+```c
+(int32_t)(expire_ticks - now)
+```
+
+Example:
+
+```text
+expire = 0x00000010
+now    = 0xFFFFFFF0
+```
+
+Even when the system tick wraps around:
+
+```text
+0xFFFFFFFF → 0x00000000
+```
+
+the comparison remains valid.
+
+To guarantee correctness:
+
+```text
+period_ticks <= INT32_MAX
+             = STIM_MAX_TICKS
+             = 2147483647
+```
+
+---
+
+### Asynchronous Start and Stop
+
+Starting and stopping timers does not immediately modify the timer list:
+
+```c
+stim_start(timer);
+stim_stop(timer);
+```
+
+Instead, commands are posted to a command queue:
+
+```text
+Producer
+    │
+    ▼
+Command Queue
+    │
+    ▼
+stim_poll()
+```
+
+The actual operation is performed later by `stim_poll()`.
+
+This allows these APIs to be safely called from:
+
+* Main loop
+* Interrupt service routines
+* RTOS tasks
+
+---
+
+### Callback Execution Model
+
+softimer supports two callback execution modes.
+
+#### Immediate Mode
+
+```text
+Timer Expired
+      │
+      ▼
+  stim_poll()
+      │
+      ▼
+   Callback
+```
+
+The callback is executed immediately when the timer expires.
+
+**Advantages**
+
+* Minimum latency
+* No event loss
+* Suitable for short operations
+
+**Limitations**
+
+* Blocking APIs should not be called
+* Not suitable for time-consuming tasks
+
+---
+
+#### Deferred Mode
+
+```text
+Timer Expired
+      │
+      ▼
+ Event Queue
+      │
+      ▼
+stim_dispatch()
+      │
+      ▼
+   Callback
+```
+
+Expiration events are first queued and later executed by `stim_dispatch()`.
+
+**Advantages**
+
+* Supports long-running operations
+* Blocking APIs are allowed
+* Safe to use functions such as `printf()` and `malloc()`
+
+**Limitations**
+
+* Callback execution is delayed
+* Latency depends on the frequency of `stim_dispatch()`
+* Events may be dropped when the queue is full
+
+---
+
+### Concurrency Model
+
+softimer internally uses an **MPSC (Multi-Producer Single-Consumer)** model.
+
+**Producers**
+
+* Main Loop
+* ISR
+* RTOS Tasks
+
+**Consumer**
+
+* `stim_poll()`
+
+Both command and event queues are protected by a lock abstraction.
+
+Platform-specific critical sections are abstracted through:
+
+```c
+static inline int stim_lock(void)
+{
+    /* Disable interrupts if needed */
+    return 0;
+}
+
+static inline void stim_unlock(int stim_lock_state)
+{
+    /* Restore interrupt state */
+    (void)stim_lock_state;
+}
+```
+
+The following APIs may be called from any execution context:
+
+* `stim_start()`
+* `stim_stop()`
+* `stim_set_count()`
+* `stim_get_count()`
+
+The following APIs must follow the single-consumer rule:
+
+* `stim_poll()`
+* `stim_dispatch()`
+
+Only one execution context may call them at a time.
+
+## API Reference
+
+### stim_tick_inc
 
 ```c
 void stim_tick_inc(void);
 ```
 
+Increment the system tick.
+
+This function should be called periodically, typically from a SysTick interrupt handler.
+
 ---
 
-## stim_get_ticks
-
-Get current tick value.
+### stim_init
 
 ```c
-uint32_t stim_get_ticks(void);
+int stim_init(stim_t *timer,
+              uint32_t period_ticks,
+              stim_cb_mode_t cb_mode,
+              stim_cb_t cb,
+              void *user_data);
 ```
+
+Initialize a timer.
+
+**Parameters**
+
+* `timer` - Timer object
+* `period_ticks` - Timer period in ticks, range `[0, 2147483647]`
+* `cb_mode` - Callback execution mode
+* `cb` - Callback function, may be `NULL`
+* `user_data` - User-defined callback parameter
+
+**Returns**
+
+* `0` - Success
+* `-STIM_EINVAL` - Invalid parameter
 
 ---
 
-## stim_poll
+### stim_start
 
-Check timer expiration and generate timer events.
+```c
+int stim_start(stim_t *timer);
+```
 
-Should be called periodically.
+Start a timer.
+
+The timer is inserted into the internal ordered timer list.
+
+**Returns**
+
+* `0` - Success
+* `-STIM_EINVAL` - Invalid parameter
+* `-STIM_EAGAIN` - Command queue full
+
+---
+
+### stim_stop
+
+```c
+int stim_stop(stim_t *timer);
+```
+
+Stop a timer.
+
+This operation is asynchronous and takes effect when processed by `stim_poll()`.
+
+**Returns**
+
+* `0` - Success
+* `-STIM_EINVAL` - Invalid parameter
+* `-STIM_EAGAIN` - Command queue full
+
+---
+
+### stim_poll
 
 ```c
 int stim_poll(void);
 ```
 
-Returns:
+Process pending commands and check timer expiration.
 
-```c
-0
-```
+* Generates expiration events for `STIM_CB_MODE_DEFERRED`
+* Executes callbacks directly for `STIM_CB_MODE_IMMEDIATE`
 
-Success
+**Returns**
 
-```c
--STIM_EAGAIN
-```
-
-Event queue full
+* `0` - Success
+* `-STIM_EAGAIN` - Event queue full
 
 ---
 
-## stim_dispatch
-
-Execute deferred callbacks.
+### stim_dispatch
 
 ```c
 void stim_dispatch(void);
 ```
 
----
+Process expiration events and execute callbacks.
 
-## stim_get_count
-
-Get timer trigger count.
-
-```c
-int stim_get_count(
-    const stim_t *timer,
-    uint32_t *count
-);
-```
+Only applicable to `STIM_CB_MODE_DEFERRED`.
 
 ---
 
-## stim_set_count
-
-Set timer trigger count.
+### stim_set_count
 
 ```c
-int stim_set_count(
-    stim_t *timer,
-    uint32_t count
-);
+int stim_set_count(stim_t *timer, uint32_t count);
 ```
+
+Set the timer event count.
 
 ---
 
-# Notes
-
-## Start/Stop operations are asynchronous
-
-Calling:
+### stim_get_count
 
 ```c
-stim_start(&timer);
-
-stim_stop(&timer);
+int stim_get_count(const stim_t *timer, uint32_t *count);
 ```
 
-does not immediately change timer state.
+Get the timer event count.
 
-Actual state changes happen during:
+## Configuration Macros
 
-```c
-stim_poll();
-```
+### STIM_ATOMIC_TICKS
 
-because commands are processed through an internal queue.
+Indicates whether system tick reads and writes are atomic.
+
+Typically enabled on 32-bit and 64-bit platforms.
+
+For 8-bit and 16-bit platforms, this macro should be undefined.
 
 ---
 
-## Queue size must be power of two
+### STIM_QUEUE_SIZE
 
-Current implementation uses:
+Length of both the command queue and event queue.
 
-```c
-next = (index + 1) &
-       (STIM_QUEUE_SIZE - 1);
-```
+Requirements:
 
-Therefore valid values are:
+* Must be a power of two
+* Must not exceed 256
 
-```c
-#define STIM_QUEUE_SIZE 2
-#define STIM_QUEUE_SIZE 4
-#define STIM_QUEUE_SIZE 8
-#define STIM_QUEUE_SIZE 16
-#define STIM_QUEUE_SIZE 32
-```
-
-Invalid examples:
-
-```c
-#define STIM_QUEUE_SIZE 3
-#define STIM_QUEUE_SIZE 5
-#define STIM_QUEUE_SIZE 10
-```
+Default value:`16`
 
 ---
 
-## Tick overflow support
+### STIM_MAX_TICKS
 
-Softimer supports tick overflow handling through signed subtraction:
-
-```c
-if ((int32_t)(expire_ticks - now) <= 0)
-```
-
-This allows timer scheduling to continue correctly even after tick wrap-around.
+Maximum allowed timer period.
 
 ---
 
-## Callback restrictions
+### STIM_EINVAL
 
-For:
-
-```c
-STIM_MODE_IMMEDIATE
-```
-
-callbacks execute inside:
-
-```c
-stim_poll()
-```
-
-Avoid recursive calls:
-
-```c
-void callback(
-    stim_t *timer,
-    void *arg
-)
-{
-    stim_poll();
-}
-```
-
-because recursive execution may occur.
+Invalid parameter error code.
 
 ---
 
-# License
+### STIM_EAGAIN
 
-MIT License
+Queue full error code.
