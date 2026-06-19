@@ -78,10 +78,8 @@ static int stim_queue_send(stim_queue_t *queue, const stim_message_t *message) {
 }
 
 static int stim_queue_receive(stim_queue_t *queue, stim_message_t *message) {
-    int stim_lock_state;
     int ret = 0;
     uint8_t r;
-    stim_lock_state = stim_lock();
     r = queue->read_index;
     if (r == queue->write_index) {
         ret = -STIM_EAGAIN;
@@ -89,7 +87,6 @@ static int stim_queue_receive(stim_queue_t *queue, stim_message_t *message) {
         *message = queue->buffer[r];
         queue->read_index = (r + 1) & (STIM_QUEUE_SIZE - 1);
     }
-    stim_unlock(stim_lock_state);
     return ret;
 }
 
